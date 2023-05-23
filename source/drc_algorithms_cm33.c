@@ -62,25 +62,7 @@ uint32_t limiter(uint8_t * music_arr, size_t music_arr_count)
 	double ctrl_factor_old = 0.0;
 	double ctrl_factor_smooth = 0.0;
 	double k;
-	uint8_t * output_array;
 	uint32_t ret_val = NOT_OK;
-
-	output_array = (uint8_t *)malloc(music_arr_count * sizeof(uint32_t));
-	if (output_array == NULL)
-	{
-		PRINTF("Failure when trying to allocate memory");
-		exit(2);
-	}
-
-	for (uint32_t i = 0U; i < music_arr_count; i++)
-	{
-		PRINTF("0x%0X, ", music_arr[i]);
-		if (i%20 == 19)
-		{
-			PRINTF("\r\n");
-		}
-	}
-	PRINTF("\r\n\n");
 
     for (uint32_t i = 0U; i < music_arr_count; i++)
     {
@@ -116,12 +98,7 @@ uint32_t limiter(uint8_t * music_arr, size_t music_arr_count)
     	ctrl_factor_smooth = (1 - k) * ctrl_factor_smooth + k * ctrl_factor;
     	ctrl_factor_old = ctrl_factor;
 
-    	output_array[i] = (uint8_t)(music_arr[i] * ctrl_factor_smooth);
-    	PRINTF("0x%0X, ", output_array[i]);
-    	if (i%20 == 19)
-    	{
-    		PRINTF("\r\n");
-    	}
+    	music_arr[i] = (uint8_t)(music_arr[i] * ctrl_factor_smooth);
     }
 
 	ret_val = OK;
@@ -137,25 +114,8 @@ uint32_t compressor_expander_ngate(uint8_t * music_arr, size_t music_arr_count)
 	double ctrl_factor_old = 0.0;
 	double ctrl_factor_smooth = 0.0;
 	double k;
-	uint8_t * output_array;
 	uint32_t ret_val = NOT_OK;
 
-	output_array = (uint8_t *)malloc(music_arr_count * sizeof(uint32_t));
-	if (output_array == NULL)
-	{
-		PRINTF("Failure when trying to allocate memory");
-		exit(2);
-	}
-
-	for (uint32_t i = 0U; i < music_arr_count; i++)
-	{
-		PRINTF("0x%0X, ", music_arr[i]);
-		if (i%20 == 19)
-		{
-			PRINTF("\r\n");
-		}
-	}
-	PRINTF("\r\n\n");
 
     for (uint32_t i = 0U; i < music_arr_count; i++)
     {
@@ -191,25 +151,9 @@ uint32_t compressor_expander_ngate(uint8_t * music_arr, size_t music_arr_count)
     	ctrl_factor_smooth = (1 - k) * ctrl_factor_smooth + k * ctrl_factor;
     	ctrl_factor_old = ctrl_factor;
 
-    	output_array[i] = (uint8_t)(music_arr[i] * ctrl_factor_smooth);
-    	PRINTF("0x%0X, ", output_array[i]);
-    	if (i%20 == 19)
-    	{
-    		PRINTF("\r\n");
-    	}
-
     }
 
 	ret_val = OK;
 
 	return ret_val;
 }
-
-//int main(void)
-//{
-//	i2s_dma_rec_playback_main();
-//	while(1)
-//	{
-//		__NOP();
-//	}
-//}

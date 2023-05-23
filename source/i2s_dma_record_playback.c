@@ -21,12 +21,14 @@
 #include "fsl_i2s_dma.h"
 #include "fsl_codec_common.h"
 #include "music.h"
-
-#include <stdbool.h>
 #include "fsl_codec_adapter.h"
 #include "fsl_cs42448.h"
+#include <stdbool.h>
+
+#include "fsl_ctimer.h"
 
 #include "drc_algorithms_cm33.h"
+
 /*******************************************************************************
  * Definitions
  ******************************************************************************/
@@ -38,12 +40,21 @@
 #define DEMO_DMA                        (DMA0)
 #define DEMO_I2S_TX_CHANNEL             (7)
 #define DEMO_I2S_RX_CHANNEL             (2)
-#define DEMO_I2S_CLOCK_DIVIDER          16
+#define DEMO_I2S_CLOCK_DIVIDER          (16)
 #define DEMO_I2S_TX_MODE                kI2S_MasterSlaveNormalMaster
 #define DEMO_I2S_RX_MODE                kI2S_MasterSlaveNormalMaster
 #define DEMO_CODEC_I2C_BASEADDR         I2C2
 #define DEMO_CODEC_I2C_INSTANCE         2U
 #define DEMO_CODEC_VOLUME               100U
+#define S_BUFFER_SIZE					400
+
+#define CTIMER          				CTIMER2         /* Timer 2 */
+#define CTIMER_MAT0_OUT 				kCTIMER_Match_0 /* Match output 0 */
+#define CTIMER_MAT1_OUT 				kCTIMER_Match_1 /* Match output 1 */
+#define CTIMER_CLK_FREQ 				CLOCK_GetCtimerClkFreq(2)
+
+#define MATCH_VAL_MS					1U
+#define MS_TO_CTIMER_CLK_TICKS(ms)		(CTIMER_CLK_FREQ * ms / 1000)
 
 /*******************************************************************************
  * Prototypes
@@ -55,6 +66,11 @@ static void TxCallback(I2S_Type *base, i2s_dma_handle_t *handle, status_t comple
 
 static void RxCallback(I2S_Type *base, i2s_dma_handle_t *handle, status_t completionStatus, void *userData);
 
+void ctimer_match0_callback(uint32_t flags);
+
+static void setup_ctimer(ctimer_config_t * config, CTIMER_Type * base, ctimer_match_config_t * matchConfig,
+		ctimer_match_t matchChannel);
+
 /*******************************************************************************
  * Variables
  ******************************************************************************/
@@ -64,7 +80,7 @@ cs42448_config_t cs42448Config = {
     .reset        = NULL,
     .master       = false,
     .i2cConfig    = {.codecI2CInstance = BOARD_CODEC_I2C_INSTANCE},
-    .format       = {.sampleRate = 48000U, .bitWidth = 16U},
+    .format       = {.sampleRate = DEMO_AUDIO_SAMPLE_RATE, .bitWidth = 16U},
     .bus          = kCS42448_BusI2S,
     .slaveAddress = CS42448_I2C_ADDR,
 };
@@ -74,7 +90,7 @@ codec_config_t boardCodecConfig = {.codecDevType = kCODEC_CS42448, .codecDevConf
 uint8_t * signal_ptr;
 uint32_t signal_arr_len;
 
-__ALIGN_BEGIN static uint8_t s_Buffer[400] __ALIGN_END; /* 100 samples => time about 2 ms */
+__ALIGN_BEGIN static uint8_t s_Buffer[S_BUFFER_SIZE] __ALIGN_END; /* 100 samples => time about 2 ms */
 static dma_handle_t s_DmaTxHandle;
 static dma_handle_t s_DmaRxHandle;
 static i2s_config_t s_TxConfig;
@@ -86,15 +102,35 @@ static i2s_transfer_t s_RxTransfer;
 extern codec_config_t boardCodecConfig;
 codec_handle_t codecHandle;
 
+static volatile unsigned long time_in_ms = 0UL;
+/* Match Configuration for Channel 0 */
+static ctimer_match_config_t matchConfig0;
+ctimer_config_t ctimer_config;
+ctimer_callback_t ctimer_callback = ctimer_match0_callback;
+
 /*******************************************************************************
  * Code
  ******************************************************************************/
+
+void ctimer_match0_callback(uint32_t flags)
+{
+	time_in_ms++;
+}
 
 /*!
  * @brief Main function
  */
 int main(void)
 {
+
+    if (NT >= ET || ET >= CT || ES >= 0.0 || NS >= 0.0)
+    {
+    	PRINTF("Wrong coefficient value defined\r\n");
+    	exit(1);
+    }
+
+    CLOCK_AttachClk(kSFRO_to_CTIMER2);
+
     BOARD_InitBootPins();
     BOARD_InitBootClocks();
     BOARD_InitDebugConsole();
@@ -193,17 +229,34 @@ int main(void)
     DMA_CreateHandle(&s_DmaTxHandle, DEMO_DMA, DEMO_I2S_TX_CHANNEL);
     DMA_CreateHandle(&s_DmaRxHandle, DEMO_DMA, DEMO_I2S_RX_CHANNEL);
 
-//    if (NT >= ET || ET >= CT || ES >= 0.0 || NS >= 0.0)
-//    {
-//    	PRINTF("Wrong coefficient value defined\r\n");
-//    	exit(1);
-//    }
+
+    matchConfig0.enableCounterReset = true;
+    matchConfig0.enableCounterStop  = false;
+    matchConfig0.matchValue         = MS_TO_CTIMER_CLK_TICKS(MATCH_VAL_MS),
+    matchConfig0.outControl         = kCTIMER_Output_Toggle;
+    matchConfig0.outPinInitState    = false;
+    matchConfig0.enableInterrupt    = true;
+
+    setup_ctimer(&ctimer_config, CTIMER, &matchConfig0, kCTIMER_Match_0);
 
     StartDigitalLoopback();
 
     while (1)
     {
+    	__NOP();
     }
+}
+
+static void setup_ctimer(ctimer_config_t * config, CTIMER_Type * base,
+		ctimer_match_config_t * matchConfig, ctimer_match_t matchChannel)
+{
+//	CLOCK_AttachClk(clock_attach_id);
+    CTIMER_GetDefaultConfig(config);
+    CTIMER_Init(base, config);
+
+    CTIMER_RegisterCallBack(base, &ctimer_callback, kCTIMER_SingleCallback);
+    CTIMER_SetupMatch(base, matchChannel, matchConfig);
+    CTIMER_StartTimer(base);
 }
 
 static void StartDigitalLoopback(void)
@@ -237,9 +290,31 @@ static void TxCallback(I2S_Type *base, i2s_dma_handle_t *handle, status_t comple
     I2S_TxTransferSendDMA(base, handle, *transfer);
 }
 
+static inline void print_buffer(uint8_t * data, size_t data_len)
+{
+	for (size_t i = 0; i < data_len; i++)
+	{
+		PRINTF("0x%0X, ", data[i]);
+		if (i%20 == 19)
+		{
+			PRINTF("\r\n");
+		}
+	}
+	PRINTF("\r\n\n");
+}
+
+static inline void stereo_to_mono(uint8_t * data, size_t data_len)
+{
+	for (size_t i = 0; i < data_len - 1; i += 2)
+	{
+		data[i+1] = data[i];
+	}
+}
+
 static void RxCallback(I2S_Type *base, i2s_dma_handle_t *handle, status_t completionStatus, void *userData)
 {
-    /* Enqueue the same original buffer all over again */
+	/* Enqueue the same original buffer all over again */
     i2s_transfer_t *transfer = (i2s_transfer_t *)userData;
+    limiter(transfer->data, transfer->dataSize);
     I2S_RxTransferReceiveDMA(base, handle, *transfer);
 }
