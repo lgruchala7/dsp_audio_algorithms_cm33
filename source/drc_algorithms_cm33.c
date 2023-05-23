@@ -42,33 +42,39 @@
 
 #include "drc_algorithms_cm33.h"
 
-#define LOG2(x) 	(log(x) / log(2.0))
+#define LOG2(x) 	(logf(x) / logf(2.0f))
 
 #define OK		0U
 #define NOT_OK 	1U
 
-/*
- * @brief   Application entry point.
- */
+static float AT;
+static float RT;
+static float TAV;
+static float log_2_LT;
 
-uint32_t limiter(uint8_t * music_arr, size_t music_arr_count);
-uint32_t compressor_expander_ngate(uint8_t * music_arr, size_t music_arr_count);
-
-uint32_t limiter(uint8_t * music_arr, size_t music_arr_count)
+void calculate_coefficients(void)
 {
-	double x_peak = 0.0;
-	double x_peak_log = 0.0;
-	double ctrl_factor = 0.0;
-	double ctrl_factor_old = 0.0;
-	double ctrl_factor_smooth = 0.0;
-	double k;
+	AT = (1.0 - exp(-2.2 * 1000.0 / (t_at_ms * fs_hz)));
+	RT = (1.0 - exp(-2.2 * 1000.0 / (t_re_ms * fs_hz)));
+	TAV = (1.0 - exp((-2.2 * 1000.0) / (t_tav_ms * fs_hz)));
+	log_2_LT = LOG2(LT);
+}
+
+uint32_t limiter(uint8_t * signal_arr, size_t signal_arr_count)
+{
+	float x_peak = 0.0f;
+	float x_peak_log = 0.0f;
+	float ctrl_factor = 0.0f;
+	float ctrl_factor_old = 0.0f;
+	float ctrl_factor_smooth = 0.0f;
+	float k;
 	uint32_t ret_val = NOT_OK;
 
-    for (uint32_t i = 0U; i < music_arr_count; i++)
+    for (uint32_t i = 0U; i < signal_arr_count; i++)
     {
-    	if ((double)music_arr[i] > x_peak)
+    	if ((float)signal_arr[i] > x_peak)
     	{
-    		x_peak = (1.0 - AT) * x_peak + AT * music_arr[i];
+    		x_peak = (1.0 - AT) * x_peak + AT * signal_arr[i];
     	}
     	else
     	{
@@ -77,9 +83,9 @@ uint32_t limiter(uint8_t * music_arr, size_t music_arr_count)
 
     	x_peak_log = LOG2(x_peak);
 
-    	if (x_peak_log > LOG2(LT))
+    	if (x_peak_log > log_2_LT)
     	{
-    		ctrl_factor = pow(2.0, -LS * (x_peak_log - LOG2(LT)));
+    		ctrl_factor = pow(2.0, -LS * (x_peak_log - log_2_LT));
     	}
     	else
     	{
@@ -98,7 +104,7 @@ uint32_t limiter(uint8_t * music_arr, size_t music_arr_count)
     	ctrl_factor_smooth = (1 - k) * ctrl_factor_smooth + k * ctrl_factor;
     	ctrl_factor_old = ctrl_factor;
 
-    	music_arr[i] = (uint8_t)(music_arr[i] * ctrl_factor_smooth);
+    	signal_arr[i] = (uint8_t)(signal_arr[i] * ctrl_factor_smooth);
     }
 
 	ret_val = OK;
@@ -106,20 +112,20 @@ uint32_t limiter(uint8_t * music_arr, size_t music_arr_count)
     return ret_val;
 }
 
-uint32_t compressor_expander_ngate(uint8_t * music_arr, size_t music_arr_count)
+uint32_t compressor_expander_ngate(uint8_t * signal_arr, size_t signal_arr_count)
 {
-	double x_rms_2 = 0;
-	double x_rms_log;
-	double ctrl_factor = 0.0;
-	double ctrl_factor_old = 0.0;
-	double ctrl_factor_smooth = 0.0;
-	double k;
+	float x_rms_2 = 0.0f;
+	float x_rms_log;
+	float ctrl_factor = 0.0f;
+	float ctrl_factor_old = 0.0f;
+	float ctrl_factor_smooth = 0.0f;
+	float k;
 	uint32_t ret_val = NOT_OK;
 
 
-    for (uint32_t i = 0U; i < music_arr_count; i++)
+    for (uint32_t i = 0U; i < signal_arr_count; i++)
     {
-    	x_rms_2 = ((1.0 - TAV) * x_rms_2 + TAV * music_arr[i] * music_arr[i]);
+    	x_rms_2 = ((1.0 - TAV) * x_rms_2 + TAV * signal_arr[i] * signal_arr[i]);
     	x_rms_log = 0.5 * LOG2(x_rms_2);
 
     	if (x_rms_log > LOG2(CT))

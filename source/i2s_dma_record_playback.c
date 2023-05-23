@@ -21,9 +21,9 @@
 #include "fsl_i2s_dma.h"
 #include "fsl_codec_common.h"
 #include "music.h"
+#include <stdbool.h>
 #include "fsl_codec_adapter.h"
 #include "fsl_cs42448.h"
-#include <stdbool.h>
 
 #include "fsl_ctimer.h"
 
@@ -62,9 +62,13 @@
 
 static void StartDigitalLoopback(void);
 
-static void TxCallback(I2S_Type *base, i2s_dma_handle_t *handle, status_t completionStatus, void *userData);
+static void TxCallback_1(I2S_Type *base, i2s_dma_handle_t *handle, status_t completionStatus, void *userData);
 
-static void RxCallback(I2S_Type *base, i2s_dma_handle_t *handle, status_t completionStatus, void *userData);
+static void RxCallback_1(I2S_Type *base, i2s_dma_handle_t *handle, status_t completionStatus, void *userData);
+
+static void TxCallback_2(I2S_Type *base, i2s_dma_handle_t *handle, status_t completionStatus, void *userData);
+
+static void RxCallback_2(I2S_Type *base, i2s_dma_handle_t *handle, status_t completionStatus, void *userData);
 
 void ctimer_match0_callback(uint32_t flags);
 
@@ -90,19 +94,25 @@ codec_config_t boardCodecConfig = {.codecDevType = kCODEC_CS42448, .codecDevConf
 uint8_t * signal_ptr;
 uint32_t signal_arr_len;
 
-__ALIGN_BEGIN static uint8_t s_Buffer[S_BUFFER_SIZE] __ALIGN_END; /* 100 samples => time about 2 ms */
+__ALIGN_BEGIN static uint8_t s_Buffer_1[S_BUFFER_SIZE] __ALIGN_END; /* 100 samples => time about 2 ms */
+__ALIGN_BEGIN static uint8_t s_Buffer_2[S_BUFFER_SIZE] __ALIGN_END; /* 100 samples => time about 2 ms */
 static dma_handle_t s_DmaTxHandle;
 static dma_handle_t s_DmaRxHandle;
 static i2s_config_t s_TxConfig;
 static i2s_config_t s_RxConfig;
-static i2s_dma_handle_t s_TxHandle;
-static i2s_dma_handle_t s_RxHandle;
-static i2s_transfer_t s_TxTransfer;
-static i2s_transfer_t s_RxTransfer;
+static i2s_dma_handle_t s_TxHandle_1;
+static i2s_dma_handle_t s_RxHandle_1;
+static i2s_dma_handle_t s_TxHandle_2;
+static i2s_dma_handle_t s_RxHandle_2;
+static i2s_transfer_t s_TxTransfer_1;
+static i2s_transfer_t s_RxTransfer_1;
+static i2s_transfer_t s_TxTransfer_2;
+static i2s_transfer_t s_RxTransfer_2;
 extern codec_config_t boardCodecConfig;
 codec_handle_t codecHandle;
 
 static volatile unsigned long time_in_ms = 0UL;
+static volatile unsigned long previous_time = 0UL;
 /* Match Configuration for Channel 0 */
 static ctimer_match_config_t matchConfig0;
 ctimer_config_t ctimer_config;
@@ -237,9 +247,26 @@ int main(void)
     matchConfig0.outPinInitState    = false;
     matchConfig0.enableInterrupt    = true;
 
-    setup_ctimer(&ctimer_config, CTIMER, &matchConfig0, kCTIMER_Match_0);
+//    setup_ctimer(&ctimer_config, CTIMER, &matchConfig0, kCTIMER_Match_0);
+
+//    unsigned long exec_time = (unsigned long)0u;
+//    unsigned long max_time = (unsigned long)0u;
+
+
+//    for(int i = 0 ; i < 1000 ; i++ ) {
+//		previous_time = time_in_ms;
+//		limiter(s_Buffer, S_BUFFER_SIZE);
+//		exec_time = (time_in_ms - previous_time);
+//		if (exec_time > max_time)
+//		{
+//			max_time = (time_in_ms - previous_time);
+//		}
+//	}
+//    PRINTF("Max time: %u ms\r\n", max_time);
 
     StartDigitalLoopback();
+
+
 
     while (1)
     {
@@ -263,36 +290,53 @@ static void StartDigitalLoopback(void)
 {
     PRINTF("Setup digital loopback\r\n");
 
-    s_TxTransfer.data     = &s_Buffer[0];
-    s_TxTransfer.dataSize = sizeof(s_Buffer);
+    s_TxTransfer_1.data     = &s_Buffer_1[0];
+    s_TxTransfer_1.dataSize = sizeof(s_Buffer_1);
 
-    s_RxTransfer.data     = &s_Buffer[0];
-    s_RxTransfer.dataSize = sizeof(s_Buffer);
+    s_RxTransfer_1.data     = &s_Buffer_1[0];
+    s_RxTransfer_1.dataSize = sizeof(s_Buffer_1);
 
-    I2S_TxTransferCreateHandleDMA(DEMO_I2S_TX, &s_TxHandle, &s_DmaTxHandle, TxCallback, (void *)&s_TxTransfer);
-    I2S_RxTransferCreateHandleDMA(DEMO_I2S_RX, &s_RxHandle, &s_DmaRxHandle, RxCallback, (void *)&s_RxTransfer);
+    s_TxTransfer_2.data     = &s_Buffer_2[0];
+    s_TxTransfer_2.dataSize = sizeof(s_Buffer_2);
+
+    s_RxTransfer_2.data     = &s_Buffer_2[0];
+    s_RxTransfer_2.dataSize = sizeof(s_Buffer_2);
+
+    I2S_TxTransferCreateHandleDMA(DEMO_I2S_TX, &s_TxHandle_1, &s_DmaTxHandle, TxCallback_1, (void *)&s_TxTransfer_1);
+    I2S_RxTransferCreateHandleDMA(DEMO_I2S_RX, &s_RxHandle_1, &s_DmaRxHandle, RxCallback_1, (void *)&s_RxTransfer_1);
+
+    I2S_TxTransferCreateHandleDMA(DEMO_I2S_TX, &s_TxHandle_2, &s_DmaTxHandle, TxCallback_2, (void *)&s_TxTransfer_2);
+    I2S_RxTransferCreateHandleDMA(DEMO_I2S_RX, &s_RxHandle_2, &s_DmaRxHandle, RxCallback_2, (void *)&s_RxTransfer_2);
 
     /* need to queue two receive buffers so when the first one is filled,
      * the other is immediatelly starts to be filled */
-    I2S_RxTransferReceiveDMA(DEMO_I2S_RX, &s_RxHandle, s_RxTransfer);
-    I2S_RxTransferReceiveDMA(DEMO_I2S_RX, &s_RxHandle, s_RxTransfer);
+    I2S_RxTransferReceiveDMA(DEMO_I2S_RX, &s_RxHandle_1, s_RxTransfer_1);
+    I2S_RxTransferReceiveDMA(DEMO_I2S_RX, &s_RxHandle_2, s_RxTransfer_2);
 
     /* need to queue two transmit buffers so when the first one
      * finishes transfer, the other immediatelly starts */
-    I2S_TxTransferSendDMA(DEMO_I2S_TX, &s_TxHandle, s_TxTransfer);
-    I2S_TxTransferSendDMA(DEMO_I2S_TX, &s_TxHandle, s_TxTransfer);
+    I2S_TxTransferSendDMA(DEMO_I2S_TX, &s_TxHandle_1, s_TxTransfer_1);
+    I2S_TxTransferSendDMA(DEMO_I2S_TX, &s_TxHandle_2, s_TxTransfer_2);
+
 }
 
-static void TxCallback(I2S_Type *base, i2s_dma_handle_t *handle, status_t completionStatus, void *userData)
+static void TxCallback_1(I2S_Type *base, i2s_dma_handle_t *handle, status_t completionStatus, void *userData)
 {
     /* Enqueue the same original buffer all over again */
     i2s_transfer_t *transfer = (i2s_transfer_t *)userData;
     I2S_TxTransferSendDMA(base, handle, *transfer);
 }
 
-static inline void print_buffer(uint8_t * data, size_t data_len)
+static void TxCallback_2(I2S_Type *base, i2s_dma_handle_t *handle, status_t completionStatus, void *userData)
 {
-	for (size_t i = 0; i < data_len; i++)
+    /* Enqueue the same original buffer all over again */
+    i2s_transfer_t *transfer = (i2s_transfer_t *)userData;
+    I2S_TxTransferSendDMA(base, handle, *transfer);
+}
+
+static inline void print_buffer_data8(uint8_t * data, size_t data_bytes)
+{
+	for (size_t i = 0; i < (data_bytes / sizeof(uint8_t)); i++)
 	{
 		PRINTF("0x%0X, ", data[i]);
 		if (i%20 == 19)
@@ -303,7 +347,20 @@ static inline void print_buffer(uint8_t * data, size_t data_len)
 	PRINTF("\r\n\n");
 }
 
-static inline void stereo_to_mono(uint8_t * data, size_t data_len)
+static inline void print_buffer_data16(uint16_t * data, size_t data_bytes)
+{
+	for (size_t i = 0; i < (data_bytes / sizeof(uint16_t)); i++)
+	{
+		PRINTF("0x%0X, ", data[i]);
+		if (i%20 == 19)
+		{
+			PRINTF("\r\n");
+		}
+	}
+	PRINTF("\r\n\n");
+}
+
+static inline void stereo_to_mono(uint16_t * data, size_t data_len)
 {
 	for (size_t i = 0; i < data_len - 1; i += 2)
 	{
@@ -311,10 +368,26 @@ static inline void stereo_to_mono(uint8_t * data, size_t data_len)
 	}
 }
 
-static void RxCallback(I2S_Type *base, i2s_dma_handle_t *handle, status_t completionStatus, void *userData)
+static void RxCallback_1(I2S_Type *base, i2s_dma_handle_t *handle, status_t completionStatus, void *userData)
 {
 	/* Enqueue the same original buffer all over again */
     i2s_transfer_t *transfer = (i2s_transfer_t *)userData;
-    limiter(transfer->data, transfer->dataSize);
-    I2S_RxTransferReceiveDMA(base, handle, *transfer);
+//		print_buffer_data8(transfer->data, transfer->dataSize);
+	//    stereo_to_mono(transfer->data, transfer->dataSize);
+//		print_buffer_data16((uint16_t *)transfer->data, transfer->dataSize);
+	//    limiter(transfer->data, transfer->dataSize);
+	//    print_buffer(transfer->data, transfer->dataSize);
+	I2S_RxTransferReceiveDMA(base, handle, *transfer);
+}
+
+static void RxCallback_2(I2S_Type *base, i2s_dma_handle_t *handle, status_t completionStatus, void *userData)
+{
+	/* Enqueue the same original buffer all over again */
+    i2s_transfer_t *transfer = (i2s_transfer_t *)userData;
+//		print_buffer_data8(transfer->data, transfer->dataSize);
+	//    stereo_to_mono(transfer->data, transfer->dataSize);
+//		print_buffer_data16((uint16_t *)transfer->data, transfer->dataSize);
+	//    limiter(transfer->data, transfer->dataSize);
+	//    print_buffer(transfer->data, transfer->dataSize);
+	I2S_RxTransferReceiveDMA(base, handle, *transfer);
 }
