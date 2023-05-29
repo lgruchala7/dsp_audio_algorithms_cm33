@@ -24,11 +24,4 @@
 		<nature>org.eclipse.cdt.managedbuilder.core.managedBuildNature</nature>
 		<nature>org.eclipse.cdt.managedbuilder.core.ScannerConfigNature</nature>
 	</natures>
-	<linkedResources>
-		<link>
-			<name>doc/readme.txt</name>
-			<type>1</type>
-			<locationURI>SDK_2_x_MIMXRT685_AUD_EVK/boards/mimxrt685audevk/driver_examples/i2s/dma_record_playback/readme.txt</locationURI>
-		</link>
-	</linkedResources>
 </projectDescription>
