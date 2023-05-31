@@ -28,7 +28,10 @@
 #include "fsl_ctimer.h"
 
 #include "drc_algorithms_cm33.h"
+#include "drc_algorithms_cm33_conf.h"
 
+#include <time.h>
+#include <stdlib.h>
 /*******************************************************************************
  * Definitions
  ******************************************************************************/
@@ -62,7 +65,7 @@
  * Prototypes
  ******************************************************************************/
 
-static void StartDigitalLoopback(void);
+static void start_digital_loopback(void);
 
 static void TxCallback(I2S_Type *base, i2s_dma_handle_t *handle, status_t completionStatus, void *userData);
 
@@ -79,6 +82,7 @@ static void setup_ctimer(ctimer_config_t * config, CTIMER_Type * base, ctimer_ma
 
 static inline void print_buffer_data8(uint8_t * data, size_t data_bytes);
 static inline void print_buffer_data16(uint16_t * data, size_t data_bytes);
+static void measure_algorithm_time(void (*algorithm_func)(uint8_t *, size_t), uint8_t * buffer, size_t buffer_size, uint32_t iterations);
 /*******************************************************************************
  * Variables
  ******************************************************************************/
@@ -114,7 +118,6 @@ extern codec_config_t boardCodecConfig;
 codec_handle_t codecHandle;
 
 static volatile unsigned long time_in_ms = 0UL;
-static volatile unsigned long previous_time = 0UL;
 /* Match Configuration for Channel 0 */
 static ctimer_match_config_t matchConfig0;
 ctimer_config_t ctimer_config;
@@ -249,26 +252,13 @@ int main(void)
     matchConfig0.outPinInitState    = false;
     matchConfig0.enableInterrupt    = true;
 
-//    setup_ctimer(&ctimer_config, CTIMER, &matchConfig0, kCTIMER_Match_0);
-
-//    unsigned long exec_time = (unsigned long)0u;
-//    unsigned long max_time = (unsigned long)0u;
-
-
-//    for(int i = 0 ; i < 1000 ; i++ ) {
-//		previous_time = time_in_ms;
-//		limiter(s_Buffer, S_BUFFER_SIZE);
-//		exec_time = (time_in_ms - previous_time);
-//		if (exec_time > max_time)
-//		{
-//			max_time = (time_in_ms - previous_time);
-//		}
-//	}
-//    PRINTF("Max time: %u ms\r\n", max_time);
-
-    StartDigitalLoopback();
+    setup_ctimer(&ctimer_config, CTIMER, &matchConfig0, kCTIMER_Match_0);
 
     calculate_coefficients();
+
+    measure_algorithm_time(limiter, s_Buffer_1, S_BUFFER_SIZE, 1000);
+
+//    start_digital_loopback();
 
     while (1)
     {
@@ -288,7 +278,7 @@ static void setup_ctimer(ctimer_config_t * config, CTIMER_Type * base,
     CTIMER_StartTimer(base);
 }
 
-static void StartDigitalLoopback(void)
+static void start_digital_loopback(void)
 {
     uint32_t *srcAddr = NULL, *destAddr = NULL, srcInc = 4UL, destInc = 4UL;
     bool intA = true;
@@ -370,13 +360,45 @@ static inline void stereo_to_mono(uint16_t * data, size_t data_len)
 static void RxCallback(I2S_Type *base, i2s_dma_handle_t *handle, status_t completionStatus, void *userData)
 {
 	/* Enqueue the same original buffer all over again */
-//    i2s_transfer_t *transfer = (i2s_transfer_t *)userData;
 //		print_buffer_data8(transfer->data, transfer->dataSize);
 	//    stereo_to_mono(transfer->data, transfer->dataSize);
 //		print_buffer_data16((uint16_t *)transfer->data, transfer->dataSize);
-	//    limiter(transfer->data, transfer->dataSize);
 	//    print_buffer(transfer->data, transfer->dataSize);
 //	I2S_RxTransferReceiveDMA(base, handle, *transfer);
 
-	__NOP();
+    i2s_transfer_t *transfer = (i2s_transfer_t *)userData;
+    compressor_expander_ngate(transfer->data, transfer->dataSize);
+}
+
+static void measure_algorithm_time(void (*algorithm_func)(uint8_t *, size_t), uint8_t * buffer, size_t buffer_size, uint32_t iterations)
+{
+	volatile unsigned long previous_time = 0UL;
+    unsigned long exec_time = 0UL;
+    unsigned long exec_time_sum = 0UL;
+    unsigned long max_time = 0UL;
+    time_t sec;
+
+    // write random values to buffer
+    srand(time(&sec));
+    for (int i = 0 ; i < buffer_size ; i++)
+    {
+    	buffer[i] = (uint8_t)(rand() % UINT8_MAX);
+    }
+
+    // execute algorithm 'iterations' times
+    for (int i = 0 ; i < iterations ; i++)
+    {
+		previous_time = time_in_ms;
+		algorithm_func(buffer, buffer_size);
+		exec_time = (time_in_ms - previous_time);
+		exec_time_sum += exec_time;
+		if (exec_time > max_time)
+		{
+			max_time = (time_in_ms - previous_time);
+		}
+	}
+
+    // print calculated values
+    PRINTF("Max time: %u ms\r\n", max_time);
+    PRINTF("Average time: %.3f ms\r\n", (exec_time_sum / (float)iterations));
 }
