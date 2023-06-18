@@ -30,8 +30,12 @@
 #include "drc_algorithms_cm33.h"
 #include "drc_algorithms_cm33_conf.h"
 
+#include "fsl_powerquad.h"
+#include "fsl_power.h"
+
 #include <time.h>
 #include <stdlib.h>
+#include <math.h>
 /*******************************************************************************
  * Definitions
  ******************************************************************************/
@@ -55,12 +59,16 @@
 
 #define CTIMER          				CTIMER2         /* Timer 2 */
 #define CTIMER_MAT0_OUT 				kCTIMER_Match_0 /* Match output 0 */
-#define CTIMER_MAT1_OUT 				kCTIMER_Match_1 /* Match output 1 */
 #define CTIMER_CLK_FREQ 				CLOCK_GetCtimerClkFreq(2)
 
-#define MATCH_VAL_MS					1U
-#define MS_TO_CTIMER_CLK_TICKS(ms)		(CTIMER_CLK_FREQ * ms / 1000)
+#define MATCH_VAL_MS					0.1
+#define MS_TO_CTIMER_CLK_TICKS(ms)		(uint32_t)(CTIMER_CLK_FREQ * ms / 1000)
+#define TICKS_TO_MS(t)					((t) * (MATCH_VAL_MS))
+#define TICKS_TO_US(t)					((t) * (MATCH_VAL_MS) * 1000.0)
 
+#define DEMO_POWERQUAD 					POWERQUAD
+
+#define TEST_ARR_SIZE						10000
 /*******************************************************************************
  * Prototypes
  ******************************************************************************/
@@ -80,9 +88,16 @@ void ctimer_match0_callback(uint32_t flags);
 static void setup_ctimer(ctimer_config_t * config, CTIMER_Type * base, ctimer_match_config_t * matchConfig,
 		ctimer_match_t matchChannel);
 
-static inline void print_buffer_data8(uint8_t * data, size_t data_bytes);
-static inline void print_buffer_data16(uint16_t * data, size_t data_bytes);
-static void measure_algorithm_time(void (*algorithm_func)(uint8_t *, size_t), uint8_t * buffer, size_t buffer_size, uint32_t iterations);
+/* auxiliary functions */
+static void print_buffer_data_8(uint8_t * data, size_t data_bytes);
+static void print_buffer_data_16(uint16_t * data, size_t data_bytes);
+static void measure_algorithm_time_8(void (*algorithm_func)(uint8_t *, size_t), uint8_t * buffer, size_t buffer_size, uint32_t iterations);
+static void measure_algorithm_time_16(void (*algorithm_func)(uint16_t *, size_t), uint16_t * buffer, size_t buffer_size, uint32_t iterations);
+static void init_arr_with_rand_8(uint8_t * arr, size_t arr_size);
+static void init_arr_with_rand_16(uint16_t * arr, size_t arr_size);
+static void test_pq_math(uint32_t iterations);
+static void init_arr_with_rand_float(float * arr, size_t arr_size);
+
 /*******************************************************************************
  * Variables
  ******************************************************************************/
@@ -117,19 +132,20 @@ static i2s_transfer_t s_TxTransfer[I2S_TRANSFER_NUM];
 extern codec_config_t boardCodecConfig;
 codec_handle_t codecHandle;
 
-static volatile unsigned long time_in_ms = 0UL;
+static volatile unsigned long ctimer_ticks = 0UL;
 /* Match Configuration for Channel 0 */
 static ctimer_match_config_t matchConfig0;
 ctimer_config_t ctimer_config;
 ctimer_callback_t ctimer_callback = ctimer_match0_callback;
 
+static float test_arr [TEST_ARR_SIZE] = {0};
 /*******************************************************************************
  * Code
  ******************************************************************************/
 
 void ctimer_match0_callback(uint32_t flags)
 {
-	time_in_ms++;
+	ctimer_ticks++;
 }
 
 /*!
@@ -143,6 +159,12 @@ int main(void)
     	PRINTF("Wrong coefficient value defined\r\n");
     	exit(1);
     }
+
+    /* Power up PQ RAM. */
+    SYSCTL0->PDRUNCFG1_CLR = SYSCTL0_PDRUNCFG1_PQ_SRAM_APD_MASK | SYSCTL0_PDRUNCFG1_PQ_SRAM_PPD_MASK;
+    /* Apply power setting. */
+    POWER_ApplyPD();
+    PQ_Init(DEMO_POWERQUAD);
 
     CLOCK_AttachClk(kSFRO_to_CTIMER2);
 
@@ -168,7 +190,7 @@ int main(void)
     cs42448Config.i2cConfig.codecI2CSourceClock = CLOCK_GetFlexCommClkFreq(2);
     cs42448Config.format.mclk_HZ                = CLOCK_GetMclkClkFreq();
 
-    PRINTF("Configure codec\r\n");
+    PRINTF("\nConfigure codec\r\n");
 
     /* protocol: i2s
      * sampleRate: 48K
@@ -252,13 +274,32 @@ int main(void)
     matchConfig0.outPinInitState    = false;
     matchConfig0.enableInterrupt    = true;
 
-    setup_ctimer(&ctimer_config, CTIMER, &matchConfig0, kCTIMER_Match_0);
+    setup_ctimer(&ctimer_config, CTIMER, &matchConfig0, CTIMER_MAT0_OUT);
 
     calculate_coefficients();
 
-    measure_algorithm_time(limiter, s_Buffer_1, S_BUFFER_SIZE, 1000);
+    /* measure algorithms execution time */
+//    PRINTF("limiter_16:\r\n");
+//    measure_algorithm_time_16(limiter_16, (uint16_t *)s_Buffer_1, (S_BUFFER_SIZE / 2), 1000);
+//    PRINTF("limiter_8:\r\n");
+//    measure_algorithm_time_8(limiter_8, (uint8_t *)s_Buffer_1, (S_BUFFER_SIZE), 1000);
+//    PRINTF("compressor_expander_ngate_16:\r\n");
+//    measure_algorithm_time_16(compressor_expander_ngate_16, (uint16_t *)s_Buffer_1, (S_BUFFER_SIZE / 2), 1000);
+//    PRINTF("compressor_expander_ngate_8:\r\n");
+//    measure_algorithm_time_8(compressor_expander_ngate_8, (uint8_t *)s_Buffer_1, (S_BUFFER_SIZE), 1000);
 
 //    start_digital_loopback();
+
+    /* check if algorithms work correctly */
+//    init_arr_with_rand_16((uint16_t *)s_Buffer_1, (S_BUFFER_SIZE / 2));
+//    print_buffer_data_16((uint16_t *)s_Buffer_1, (S_BUFFER_SIZE / 2));
+//    compressor_expander_ngate_16((uint16_t *)s_Buffer_1, (S_BUFFER_SIZE / 2));
+//    print_buffer_data_16((uint16_t *)s_Buffer_1, (S_BUFFER_SIZE / 2));
+
+	for (int var = 0; var < 5; ++var) {
+		test_pq_math(TEST_ARR_SIZE);
+		PRINTF("\r\n");
+	}
 
     while (1)
     {
@@ -269,7 +310,9 @@ int main(void)
 static void setup_ctimer(ctimer_config_t * config, CTIMER_Type * base,
 		ctimer_match_config_t * matchConfig, ctimer_match_t matchChannel)
 {
-//	CLOCK_AttachClk(clock_attach_id);
+//	CLOCK_AttachClk(kSFRO_to_CTIMER2);
+//	PRINTF("CTIMER2 Clock Frequency: %u\r\n", CTIMER_CLK_FREQ);
+//	PRINTF("CTIMER2 Match Value: %u\r\n", MS_TO_CTIMER_CLK_TICKS(MATCH_VAL_MS));
     CTIMER_GetDefaultConfig(config);
     CTIMER_Init(base, config);
 
@@ -323,9 +366,9 @@ static void TxCallback(I2S_Type *base, i2s_dma_handle_t *handle, status_t comple
 	__NOP();
 }
 
-static inline void print_buffer_data8(uint8_t * data, size_t data_bytes)
+static void print_buffer_data_8(uint8_t * data, size_t data_size)
 {
-	for (size_t i = 0; i < (data_bytes / sizeof(uint8_t)); i++)
+	for (size_t i = 0; i < data_size; i++)
 	{
 		PRINTF("0x%0X, ", data[i]);
 		if (i%20 == 19)
@@ -336,9 +379,9 @@ static inline void print_buffer_data8(uint8_t * data, size_t data_bytes)
 	PRINTF("\r\n\n");
 }
 
-static inline void print_buffer_data16(uint16_t * data, size_t data_bytes)
+static void print_buffer_data_16(uint16_t * data, size_t data_size)
 {
-	for (size_t i = 0; i < (data_bytes / sizeof(uint16_t)); i++)
+	for (size_t i = 0; i < data_size; i++)
 	{
 		PRINTF("0x%0X, ", data[i]);
 		if (i%20 == 19)
@@ -359,46 +402,162 @@ static inline void stereo_to_mono(uint16_t * data, size_t data_len)
 
 static void RxCallback(I2S_Type *base, i2s_dma_handle_t *handle, status_t completionStatus, void *userData)
 {
-	/* Enqueue the same original buffer all over again */
-//		print_buffer_data8(transfer->data, transfer->dataSize);
-	//    stereo_to_mono(transfer->data, transfer->dataSize);
-//		print_buffer_data16((uint16_t *)transfer->data, transfer->dataSize);
-	//    print_buffer(transfer->data, transfer->dataSize);
-//	I2S_RxTransferReceiveDMA(base, handle, *transfer);
+	static unsigned long last_time =  0UL;
+	static int counter = 0;
+	static bool isIntA = true;
+	static unsigned long ticks_sum = 0UL;
+
+	if (last_time == 0UL)
+	{
+		last_time = ctimer_ticks;
+	}
+
+	if (isIntA)
+	{
+		isIntA = false;
+		counter++;
+//		last_time = ctimer_ticks;
+	}
+	else
+	{
+		isIntA = true;
+//		ticks_sum += (ctimer_ticks - last_time);
+	}
 
     i2s_transfer_t *transfer = (i2s_transfer_t *)userData;
-    compressor_expander_ngate(transfer->data, transfer->dataSize);
+    compressor_expander_ngate_16((uint16_t *)transfer->data, transfer->dataSize);
+    if (counter == 1000 && !isIntA)
+    {
+    	PRINTF("Time between interrupts for transfer 1: %.3f\r\n", TICKS_TO_MS(ctimer_ticks - last_time)/1000.0);
+    }
 }
 
-static void measure_algorithm_time(void (*algorithm_func)(uint8_t *, size_t), uint8_t * buffer, size_t buffer_size, uint32_t iterations)
+static void measure_algorithm_time_16(void (*algorithm_func)(uint16_t *, size_t), uint16_t * buffer, size_t buffer_size, uint32_t iterations)
 {
 	volatile unsigned long previous_time = 0UL;
-    unsigned long exec_time = 0UL;
-    unsigned long exec_time_sum = 0UL;
-    unsigned long max_time = 0UL;
-    time_t sec;
+    unsigned long exec_time_ticks = 0UL;
+    unsigned long exec_time_ticks_sum = 0UL;
+    unsigned long max_time_ticks = 0UL;
 
     // write random values to buffer
-    srand(time(&sec));
-    for (int i = 0 ; i < buffer_size ; i++)
-    {
-    	buffer[i] = (uint8_t)(rand() % UINT8_MAX);
-    }
+    init_arr_with_rand_16(buffer, buffer_size);
 
     // execute algorithm 'iterations' times
-    for (int i = 0 ; i < iterations ; i++)
+    for (int i = 0; i < iterations; i++)
     {
-		previous_time = time_in_ms;
+		previous_time = ctimer_ticks;
 		algorithm_func(buffer, buffer_size);
-		exec_time = (time_in_ms - previous_time);
-		exec_time_sum += exec_time;
-		if (exec_time > max_time)
+		exec_time_ticks = (ctimer_ticks - previous_time);
+		exec_time_ticks_sum += exec_time_ticks;
+		if (exec_time_ticks > max_time_ticks)
 		{
-			max_time = (time_in_ms - previous_time);
+			max_time_ticks = exec_time_ticks;
 		}
 	}
 
     // print calculated values
-    PRINTF("Max time: %u ms\r\n", max_time);
-    PRINTF("Average time: %.3f ms\r\n", (exec_time_sum / (float)iterations));
+    PRINTF("Max time: %.3f ms\r\n", TICKS_TO_MS(max_time_ticks));
+    PRINTF("Average time: %.3f ms\r\n", (TICKS_TO_MS(exec_time_ticks_sum) / (float)iterations));
+}
+
+static void measure_algorithm_time_8(void (*algorithm_func)(uint8_t *, size_t), uint8_t * buffer, size_t buffer_size, uint32_t iterations)
+{
+	volatile unsigned long previous_time = 0UL;
+    unsigned long exec_time_ticks = 0UL;
+    unsigned long exec_time_ticks_sum = 0UL;
+    unsigned long max_time_ticks = 0UL;
+
+    // write random values to buffer
+    init_arr_with_rand_8(buffer, buffer_size);
+
+    // execute algorithm 'iterations' times
+    for (int i = 0; i < iterations; i++)
+    {
+		previous_time = ctimer_ticks;
+		algorithm_func(buffer, buffer_size);
+		exec_time_ticks = (ctimer_ticks - previous_time);
+		exec_time_ticks_sum += exec_time_ticks;
+		if (exec_time_ticks > max_time_ticks)
+		{
+			max_time_ticks = exec_time_ticks;
+		}
+	}
+
+    // print calculated values
+    PRINTF("Max time: %.3f ms\r\n", TICKS_TO_MS(max_time_ticks));
+    PRINTF("Average time: %.3f ms\r\n", (TICKS_TO_MS(exec_time_ticks_sum) / (float)iterations));
+}
+
+static void init_arr_with_rand_8(uint8_t * arr, size_t arr_size)
+{
+    srand(time(NULL));
+    for (int i = 0 ; i < arr_size ; i++)
+    {
+    	arr[i] = (uint8_t)(rand() % UINT8_MAX);
+    }
+}
+
+static void init_arr_with_rand_16(uint16_t * arr, size_t arr_size)
+{
+	srand(time(NULL));
+    for (int i = 0 ; i < arr_size ; i++)
+    {
+    	arr[i] = (uint16_t)(rand() % UINT16_MAX);
+    }
+}
+
+static void init_arr_with_rand_float(float * arr, size_t arr_size)
+{
+	srand(time(NULL));
+    for (int i = 0 ; i < arr_size ; i++)
+    {
+    	arr[i] = (float)(rand() % UINT8_MAX);
+    }
+}
+
+static void test_pq_math(uint32_t iterations)
+{
+	volatile unsigned long previous_time = 0UL;
+    unsigned long exec_time_ticks = 0UL;
+    unsigned long exec_time_ticks_sum = 0UL;
+
+	float x1 = 3.0f;
+	float x2 = 9.0f;
+	volatile float result;
+
+	init_arr_with_rand_float(test_arr, iterations);
+
+	previous_time = ctimer_ticks;
+	for (int i = 0; i < iterations; i++)
+	{
+		PQ_DivF32(&x1, &test_arr[i], &result);
+	}
+	exec_time_ticks_sum = (ctimer_ticks - previous_time);
+
+	PRINTF("[PQ] Average time x1/x2: %.3f us\r\n", (TICKS_TO_US(exec_time_ticks_sum) / (float)iterations));
+
+	previous_time = ctimer_ticks;
+	for (int i = 0; i < iterations; i++)
+	{
+		result = x1 / test_arr[i];
+	}
+	exec_time_ticks_sum = (ctimer_ticks - previous_time);
+	PRINTF("[CM-33] Average time x1/x2: %.3f us\r\n", (TICKS_TO_US(exec_time_ticks_sum) / (float)iterations));
+
+
+	previous_time = ctimer_ticks;
+	for (int i = 0; i < iterations; i++)
+	{
+		PQ_LnF32(&test_arr[i], &result);
+	}
+	exec_time_ticks_sum = (ctimer_ticks - previous_time);
+	PRINTF("[PQ] Average time ln: %.3f us\r\n", (TICKS_TO_US(exec_time_ticks_sum) / (float)iterations));
+
+	previous_time = ctimer_ticks;
+	for (int i = 0; i < iterations; i++)
+	{
+		result = logf(test_arr[i]);
+	}
+	exec_time_ticks_sum = (ctimer_ticks - previous_time);
+	PRINTF("[CM-33] Average time ln: %.3f us\r\n", (TICKS_TO_US(exec_time_ticks_sum) / (float)iterations));
 }

@@ -30,7 +30,7 @@
 
 /**
  * @file    drc_algorithms_cm33.c
- * @brief   Application entry point.
+ * @brief   DSP algorithms implementations.
  */
 #include <stdio.h>
 #include "board.h"
@@ -49,18 +49,18 @@
 #define OK		0U
 #define NOT_OK 	1U
 
-static float AT;
-static float RT;
-static float TAV;
-static float log2_LT;
-static float log2_CT;
-static float log2_ET;
-static float log2_NT;
-static float diff_ET_NT;
-static float ES_times_diff_ET_NT;
-static float one_minus_AT;
-static float one_minus_RT;
-static float one_minus_TAV;
+static float AT = 0.0f;
+static float RT = 0.0f;
+static float TAV = 0.0f;
+static float log2_LT = 0.0f;
+static float log2_CT = 0.0f;
+static float log2_ET = 0.0f;
+static float log2_NT = 0.0f;
+static float diff_ET_NT = 0.0f;
+static float ES_times_diff_ET_NT = 0.0f;
+static float one_minus_AT = 0.0f;
+static float one_minus_RT = 0.0f;
+static float one_minus_TAV = 0.0f;
 
 void calculate_coefficients(void)
 {
@@ -78,7 +78,7 @@ void calculate_coefficients(void)
 	ES_times_diff_ET_NT = (ES * diff_ET_NT);
 }
 
-void limiter(uint8_t * signal_arr, size_t signal_arr_count)
+void limiter_8(uint8_t * signal_arr, size_t signal_arr_count)
 {
 	float x_peak = 0.0f;
 	float x_peak_log = 0.0f;
@@ -86,7 +86,7 @@ void limiter(uint8_t * signal_arr, size_t signal_arr_count)
 	float ctrl_factor_sqrt = 0.0f;
 	float ctrl_factor_old = 0.0f;
 	float ctrl_factor_smooth = 0.0f;
-	float k;
+	float k = 0.0f;
 
     for (uint32_t i = 0U; i < signal_arr_count; i++)
     {
@@ -128,15 +128,105 @@ void limiter(uint8_t * signal_arr, size_t signal_arr_count)
     }
 }
 
-void compressor_expander_ngate(uint8_t * signal_arr, size_t signal_arr_count)
+void limiter_16(uint16_t * signal_arr, size_t signal_arr_count)
 {
-	float x_rms_pow2 = 0.0f;
-	float x_rms_log;
+	float x_peak = 0.0f;
+	float x_peak_log = 0.0f;
 	float ctrl_factor = 0.0f;
 	float ctrl_factor_sqrt = 0.0f;
 	float ctrl_factor_old = 0.0f;
 	float ctrl_factor_smooth = 0.0f;
-	float k;
+	float k = 0.0f;
+
+    for (uint32_t i = 0U; i < signal_arr_count; i += 2)
+    {
+    	if ((float)signal_arr[i] > x_peak)
+    	{
+    		x_peak = one_minus_AT * x_peak + AT * signal_arr[i];
+    	}
+    	else
+    	{
+    		x_peak = one_minus_RT * x_peak;
+    	}
+
+    	x_peak_log = LOG2(x_peak);
+
+    	if (x_peak_log > log2_LT)
+    	{
+    		ctrl_factor_sqrt = -LS * (x_peak_log - log2_LT);
+    		ctrl_factor = ctrl_factor_sqrt * ctrl_factor_sqrt;
+    	}
+    	else
+    	{
+    		ctrl_factor = 1.0f;
+    	}
+
+    	if (ctrl_factor < ctrl_factor_old)
+    	{
+    		k = RT;
+    	}
+    	else
+    	{
+    		k = AT;
+    	}
+
+    	ctrl_factor_smooth = (1.0f - k) * ctrl_factor_smooth + k * ctrl_factor;
+    	ctrl_factor_old = ctrl_factor;
+
+    	signal_arr[i] = (uint16_t)(signal_arr[i] * ctrl_factor_smooth);
+    }
+
+    x_peak = 0.0f;
+    ctrl_factor_old = 0.0f;
+
+    for (uint32_t i = 1U; i < signal_arr_count; i += 2)
+    {
+    	if ((float)signal_arr[i] > x_peak)
+    	{
+    		x_peak = one_minus_AT * x_peak + AT * signal_arr[i];
+    	}
+    	else
+    	{
+    		x_peak = one_minus_RT * x_peak;
+    	}
+
+    	x_peak_log = LOG2(x_peak);
+
+    	if (x_peak_log > log2_LT)
+    	{
+    		ctrl_factor_sqrt = -LS * (x_peak_log - log2_LT);
+    		ctrl_factor = ctrl_factor_sqrt * ctrl_factor_sqrt;
+    	}
+    	else
+    	{
+    		ctrl_factor = 1.0f;
+    	}
+
+    	if (ctrl_factor < ctrl_factor_old)
+    	{
+    		k = RT;
+    	}
+    	else
+    	{
+    		k = AT;
+    	}
+
+    	ctrl_factor_smooth = (1.0f - k) * ctrl_factor_smooth + k * ctrl_factor;
+    	ctrl_factor_old = ctrl_factor;
+
+    	signal_arr[i] = (uint16_t)(signal_arr[i] * ctrl_factor_smooth);
+    }
+}
+
+void compressor_expander_ngate_8(uint8_t * signal_arr, size_t signal_arr_count)
+{
+	float x_rms_pow2 = 0.0f;
+	float x_rms_log = 0.0f;
+	float ctrl_factor = 0.0f;
+	float ctrl_factor_sqrt = 0.0f;
+	float ctrl_factor_old = 0.0f;
+	float ctrl_factor_smooth = 0.0f;
+	float k = 0.0f;
 
     for (uint32_t i = 0U; i < signal_arr_count; i++)
     {
@@ -178,5 +268,101 @@ void compressor_expander_ngate(uint8_t * signal_arr, size_t signal_arr_count)
     	ctrl_factor_smooth = (1.0f - k) * ctrl_factor_smooth + k * ctrl_factor;
     	ctrl_factor_old = ctrl_factor;
 
+    	signal_arr[i] = (uint8_t)(signal_arr[i] * ctrl_factor_smooth);
+    }
+}
+
+void compressor_expander_ngate_16(uint16_t * signal_arr, size_t signal_arr_count)
+{
+	float x_rms_pow2 = 0.0f;
+	float x_rms_log;
+	float ctrl_factor = 0.0f;
+	float ctrl_factor_sqrt = 0.0f;
+	float ctrl_factor_old = 0.0f;
+	float ctrl_factor_smooth = 0.0f;
+	float k;
+
+    for (uint32_t i = 0U; i < signal_arr_count; i += 2 )
+    {
+    	x_rms_pow2 = (one_minus_TAV * x_rms_pow2 + TAV * signal_arr[i] * signal_arr[i]);
+    	x_rms_log = 0.5f * LOG2(x_rms_pow2);
+
+    	if (x_rms_log > log2_CT)
+    	{
+    		ctrl_factor_sqrt = -CS * (x_rms_log - log2_CT);
+    		ctrl_factor = ctrl_factor_sqrt * ctrl_factor_sqrt;
+    	}
+    	else if (x_rms_log >= log2_ET)
+    	{
+    		ctrl_factor = 1.0f;
+    	}
+    	else if (x_rms_log >= log2_NT)
+    	{
+    		ctrl_factor_sqrt = -ES * (x_rms_log - log2_ET);
+    		ctrl_factor = ctrl_factor_sqrt * ctrl_factor_sqrt;
+    	}
+    	else
+    	{
+    		ctrl_factor_sqrt = -NS * (x_rms_log - log2_NT) + ES_times_diff_ET_NT;
+    		ctrl_factor = ctrl_factor_sqrt * ctrl_factor_sqrt;
+    	}
+
+    	if (ctrl_factor < ctrl_factor_old)
+    	{
+    		k = RT;
+    	}
+    	else
+    	{
+    		k = AT;
+    	}
+
+    	ctrl_factor_smooth = (1.0f - k) * ctrl_factor_smooth + k * ctrl_factor;
+    	ctrl_factor_old = ctrl_factor;
+
+    	signal_arr[i] = (uint16_t)(signal_arr[i] * ctrl_factor_smooth);
+    }
+
+	x_rms_pow2 = 0.0f;
+	ctrl_factor_old = 0.0f;
+	ctrl_factor_smooth = 0.0f;
+
+    for (uint32_t i = 1U; i < signal_arr_count; i += 2 )
+    {
+    	x_rms_pow2 = (one_minus_TAV * x_rms_pow2 + TAV * signal_arr[i] * signal_arr[i]);
+    	x_rms_log = 0.5f * LOG2(x_rms_pow2);
+
+    	if (x_rms_log > log2_CT)
+    	{
+    		ctrl_factor_sqrt = -CS * (x_rms_log - log2_CT);
+    		ctrl_factor = ctrl_factor_sqrt * ctrl_factor_sqrt;
+    	}
+    	else if (x_rms_log >= log2_ET)
+    	{
+    		ctrl_factor = 1.0f;
+    	}
+    	else if (x_rms_log >= log2_NT)
+    	{
+    		ctrl_factor_sqrt = -ES * (x_rms_log - log2_ET);
+    		ctrl_factor = ctrl_factor_sqrt * ctrl_factor_sqrt;
+    	}
+    	else
+    	{
+    		ctrl_factor_sqrt = -NS * (x_rms_log - log2_NT) + ES_times_diff_ET_NT;
+    		ctrl_factor = ctrl_factor_sqrt * ctrl_factor_sqrt;
+    	}
+
+    	if (ctrl_factor < ctrl_factor_old)
+    	{
+    		k = RT;
+    	}
+    	else
+    	{
+    		k = AT;
+    	}
+
+    	ctrl_factor_smooth = (1.0f - k) * ctrl_factor_smooth + k * ctrl_factor;
+    	ctrl_factor_old = ctrl_factor;
+
+    	signal_arr[i] = (uint16_t)(signal_arr[i] * ctrl_factor_smooth);
     }
 }
