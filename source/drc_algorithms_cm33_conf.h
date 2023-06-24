@@ -9,43 +9,40 @@
 #define DRC_ALGORITHMS_CM33_CONF_H_
 
 #define _16_bit
+#define PQ_USED
 
 /* attack time */
-#define t_at_ms		0.1f
+const float t_at_ms 	= 0.1f;
 /* release time */
-#define t_re_ms 	5.0f
+const float t_re_ms 	= 5.0f;
 /* averaging time */
-#define t_tav_ms	0.1f
+const float t_tav_ms 	= 0.1f;
 /* sampling frequency in Hz*/
-#define fs_hz		44100.0f
-/* limiter threshold */
-#ifdef _16_bit
-#define LT			51400.0f
-#else
-#define LT			200.0f
-#endif
+const float fs_hz 		= 44100.0f;
 /* limiter slope */
-#define LS			1.0f
-/* compressor threshold */
-#define CT			38550.0f
-//#define CT			150.0f
+const float LS 			= 1.0f;
 /* compressor slope */
-#define CS			0.9f
-/* expander threshold */
-#ifdef _16_bit
-#define ET			25700.0f
-#else
-#define ET			100.0f
-#endif
+const float CS 			= 0.9f;
 /* expander slope */
-#define ES			-0.9f
-/* noise gate threshold */
-#ifdef _16_bit
-#define NT			12850.0f
-#else
-#define NT			50.0f
-#endif
+const float ES 			= -0.9f;
 /* noise gate slope */
-#define NS			-10.0f
+const float NS 			= -10.0f;
+
+#ifdef _16_bit
+/* limiter threshold */
+const float LT = 51400.0f;
+/* compressor threshold */
+const float CT = 38550.0f;
+/* expander threshold */
+const float ET = 25700.0f;
+/* noise gate threshold */
+const float NT = 12850.0f;
+#else
+const float LT = 200.0f;
+const float CT = 150.0f;
+const float ET = 100.0f;
+const float NT = 50.0f;
+#endif
+
 
 #endif /* DRC_ALGORITHMS_CM33_CONF_H_ */

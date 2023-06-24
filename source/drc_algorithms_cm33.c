@@ -32,19 +32,15 @@
  * @file    drc_algorithms_cm33.c
  * @brief   DSP algorithms implementations.
  */
-#include <stdio.h>
-#include "board.h"
-#include "pin_mux.h"
-#include "clock_config.h"
-#include "MIMXRT685S_cm33.h"
+
 #include "fsl_debug_console.h"
 #include <math.h>
 
 #include "drc_algorithms_cm33.h"
 #include "drc_algorithms_cm33_conf.h"
 
-#define LN_OF_2		0.693147
-#define LOG2(x) 	(logf(x) / LN_OF_2)
+#include "fsl_powerquad.h"
+#include "fsl_power.h"
 
 #define OK		0U
 #define NOT_OK 	1U
@@ -62,15 +58,43 @@ static float one_minus_AT = 0.0f;
 static float one_minus_RT = 0.0f;
 static float one_minus_TAV = 0.0f;
 
+const static float LN_OF_2 = 0.693147f;
+
+#ifdef PQ_USED
+#define LOG2(p_src, p_dst) 	do { \
+									PQ_LnF32(p_src, p_dst); \
+									PQ_DivF32(p_dst, &LN_OF_2, p_dst); \
+								} while (0)
+#else
+#define LOG2(x) 				(logf(x) / LN_OF_2)
+
+#endif
+
+void check_coefficients_corectness(void)
+{
+	if (NT >= ET || ET >= CT || ES >= 0.0 || NS >= 0.0)
+	{
+		PRINTF("Wrong coefficient value defined\r\n");
+		exit(1);
+	}
+}
+
 void calculate_coefficients(void)
 {
-	AT = (1.0 - exp(-2.2 * 1000.0 / (t_at_ms * fs_hz)));
-	RT = (1.0 - exp(-2.2 * 1000.0 / (t_re_ms * fs_hz)));
-	TAV = (1.0 - exp((-2.2 * 1000.0) / (t_tav_ms * fs_hz)));
+	AT = (float)(1.0 - exp(-2.2 * 1000.0 / (t_at_ms * fs_hz)));
+	RT = (float)(1.0 - exp(-2.2 * 1000.0 / (t_re_ms * fs_hz)));
+	TAV = (float)(1.0 - exp((-2.2 * 1000.0) / (t_tav_ms * fs_hz)));
+#ifdef PQ_USED
+	LOG2(&LT, &log2_LT);
+	LOG2(&CT, &log2_CT);
+	LOG2(&ET, &log2_ET);
+	LOG2(&NT, &log2_NT);
+#else
 	log2_LT = LOG2(LT);
 	log2_CT = LOG2(CT);
 	log2_ET = LOG2(ET);
 	log2_NT = LOG2(NT);
+#endif
 	one_minus_AT = (1.0f - AT);
 	one_minus_RT = (1.0f - RT);
 	one_minus_TAV = (1.0f - TAV);
@@ -99,7 +123,11 @@ void limiter_8(uint8_t * signal_arr, size_t signal_arr_count)
     		x_peak = one_minus_RT * x_peak;
     	}
 
+#ifdef PQ_USED
+    	LOG2(&x_peak, &x_peak_log);
+#else
     	x_peak_log = LOG2(x_peak);
+#endif
 
     	if (x_peak_log > log2_LT)
     	{
@@ -149,7 +177,11 @@ void limiter_16(uint16_t * signal_arr, size_t signal_arr_count)
     		x_peak = one_minus_RT * x_peak;
     	}
 
+#ifdef PQ_USED
+    	LOG2(&x_peak, &x_peak_log);
+#else
     	x_peak_log = LOG2(x_peak);
+#endif
 
     	if (x_peak_log > log2_LT)
     	{
@@ -190,7 +222,11 @@ void limiter_16(uint16_t * signal_arr, size_t signal_arr_count)
     		x_peak = one_minus_RT * x_peak;
     	}
 
+#ifdef PQ_USED
+    	LOG2(&x_peak, &x_peak_log);
+#else
     	x_peak_log = LOG2(x_peak);
+#endif
 
     	if (x_peak_log > log2_LT)
     	{
@@ -231,7 +267,13 @@ void compressor_expander_ngate_8(uint8_t * signal_arr, size_t signal_arr_count)
     for (uint32_t i = 0U; i < signal_arr_count; i++)
     {
     	x_rms_pow2 = (one_minus_TAV * x_rms_pow2 + TAV * signal_arr[i] * signal_arr[i]);
+
+#ifdef PQ_USED
+    	LOG2(&x_rms_pow2, &x_rms_log);
+    	x_rms_log *= 0.5f;
+#else
     	x_rms_log = 0.5f * LOG2(x_rms_pow2);
+#endif
 
     	if (x_rms_log > log2_CT)
     	{
@@ -280,12 +322,18 @@ void compressor_expander_ngate_16(uint16_t * signal_arr, size_t signal_arr_count
 	float ctrl_factor_sqrt = 0.0f;
 	float ctrl_factor_old = 0.0f;
 	float ctrl_factor_smooth = 0.0f;
-	float k;
+	float k = 0.0f;
 
     for (uint32_t i = 0U; i < signal_arr_count; i += 2 )
     {
     	x_rms_pow2 = (one_minus_TAV * x_rms_pow2 + TAV * signal_arr[i] * signal_arr[i]);
+
+#ifdef PQ_USED
+    	LOG2(&x_rms_pow2, &x_rms_log);
+    	x_rms_log *= 0.5f;
+#else
     	x_rms_log = 0.5f * LOG2(x_rms_pow2);
+#endif
 
     	if (x_rms_log > log2_CT)
     	{
@@ -329,7 +377,13 @@ void compressor_expander_ngate_16(uint16_t * signal_arr, size_t signal_arr_count
     for (uint32_t i = 1U; i < signal_arr_count; i += 2 )
     {
     	x_rms_pow2 = (one_minus_TAV * x_rms_pow2 + TAV * signal_arr[i] * signal_arr[i]);
+
+#ifdef PQ_USED
+    	LOG2(&x_rms_pow2, &x_rms_log);
+    	x_rms_log *= 0.5f;
+#else
     	x_rms_log = 0.5f * LOG2(x_rms_pow2);
+#endif
 
     	if (x_rms_log > log2_CT)
     	{
