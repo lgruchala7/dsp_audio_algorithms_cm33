@@ -59,18 +59,19 @@ static float one_minus_RT = 0.0f;
 static float one_minus_TAV = 0.0f;
 
 const static float LN_OF_2 = 0.693147f;
+const static uint16_t const_comp = (UINT16_MAX / 2);
 
 #ifdef PQ_USED
 #define LOG2(p_src, p_dst) 	do { \
 									PQ_LnF32(p_src, p_dst); \
-									PQ_DivF32(p_dst, &LN_OF_2, p_dst); \
+									PQ_DivF32(p_dst, (float *)&LN_OF_2, p_dst); \
 								} while (0)
 #else
 #define LOG2(x) 				(logf(x) / LN_OF_2)
 
 #endif
 
-void check_coefficients_corectness(void)
+void check_coeff_validity(void)
 {
 	if (NT >= ET || ET >= CT || ES >= 0.0 || NS >= 0.0)
 	{
@@ -85,10 +86,11 @@ void calculate_coefficients(void)
 	RT = (float)(1.0 - exp(-2.2 * 1000.0 / (t_re_ms * fs_hz)));
 	TAV = (float)(1.0 - exp((-2.2 * 1000.0) / (t_tav_ms * fs_hz)));
 #ifdef PQ_USED
-	LOG2(&LT, &log2_LT);
-	LOG2(&CT, &log2_CT);
-	LOG2(&ET, &log2_ET);
-	LOG2(&NT, &log2_NT);
+	// casting to suppress discarded qualifier warning
+	LOG2((float *)&LT, &log2_LT);
+	LOG2((float *)&CT, &log2_CT);
+	LOG2((float *)&ET, &log2_ET);
+	LOG2((float *)&NT, &log2_NT);
 #else
 	log2_LT = LOG2(LT);
 	log2_CT = LOG2(CT);
@@ -102,7 +104,7 @@ void calculate_coefficients(void)
 	ES_times_diff_ET_NT = (ES * diff_ET_NT);
 }
 
-void limiter_8(uint8_t * signal_arr, size_t signal_arr_count)
+void limiter_u16(uint16_t * src_signal_arr, uint16_t * dst_signal_arr, size_t signal_arr_count)
 {
 	float x_peak = 0.0f;
 	float x_peak_log = 0.0f;
@@ -112,65 +114,12 @@ void limiter_8(uint8_t * signal_arr, size_t signal_arr_count)
 	float ctrl_factor_smooth = 0.0f;
 	float k = 0.0f;
 
-    for (uint32_t i = 0U; i < signal_arr_count; i++)
-    {
-    	if ((float)signal_arr[i] > x_peak)
-    	{
-    		x_peak = one_minus_AT * x_peak + AT * signal_arr[i];
-    	}
-    	else
-    	{
-    		x_peak = one_minus_RT * x_peak;
-    	}
-
-#ifdef PQ_USED
-    	LOG2(&x_peak, &x_peak_log);
-#else
-    	x_peak_log = LOG2(x_peak);
-#endif
-
-    	if (x_peak_log > log2_LT)
-    	{
-//    		ctrl_factor = powf(2.0f, -LS * (x_peak_log - log2_LT));
-    		ctrl_factor_sqrt = -LS * (x_peak_log - log2_LT);
-    		ctrl_factor = ctrl_factor_sqrt * ctrl_factor_sqrt;
-    	}
-    	else
-    	{
-    		ctrl_factor = 1.0f;
-    	}
-
-    	if (ctrl_factor < ctrl_factor_old)
-    	{
-    		k = RT;
-    	}
-    	else
-    	{
-    		k = AT;
-    	}
-
-    	ctrl_factor_smooth = (1.0f - k) * ctrl_factor_smooth + k * ctrl_factor;
-    	ctrl_factor_old = ctrl_factor;
-
-    	signal_arr[i] = (uint8_t)(signal_arr[i] * ctrl_factor_smooth);
-    }
-}
-
-void limiter_16(uint16_t * signal_arr, size_t signal_arr_count)
-{
-	float x_peak = 0.0f;
-	float x_peak_log = 0.0f;
-	float ctrl_factor = 0.0f;
-	float ctrl_factor_sqrt = 0.0f;
-	float ctrl_factor_old = 0.0f;
-	float ctrl_factor_smooth = 0.0f;
-	float k = 0.0f;
-
+	/* left channel */
     for (uint32_t i = 0U; i < signal_arr_count; i += 2)
     {
-    	if ((float)signal_arr[i] > x_peak)
+    	if ((float)src_signal_arr[i] > x_peak)
     	{
-    		x_peak = one_minus_AT * x_peak + AT * signal_arr[i];
+    		x_peak = one_minus_AT * x_peak + AT * src_signal_arr[i];
     	}
     	else
     	{
@@ -205,17 +154,18 @@ void limiter_16(uint16_t * signal_arr, size_t signal_arr_count)
     	ctrl_factor_smooth = (1.0f - k) * ctrl_factor_smooth + k * ctrl_factor;
     	ctrl_factor_old = ctrl_factor;
 
-    	signal_arr[i] = (uint16_t)(signal_arr[i] * ctrl_factor_smooth);
+    	dst_signal_arr[i] = (uint16_t)(src_signal_arr[i] * ctrl_factor_smooth);
     }
 
     x_peak = 0.0f;
     ctrl_factor_old = 0.0f;
 
+    /* right channel */
     for (uint32_t i = 1U; i < signal_arr_count; i += 2)
     {
-    	if ((float)signal_arr[i] > x_peak)
+    	if ((float)src_signal_arr[i] > x_peak)
     	{
-    		x_peak = one_minus_AT * x_peak + AT * signal_arr[i];
+    		x_peak = one_minus_AT * x_peak + AT * src_signal_arr[i];
     	}
     	else
     	{
@@ -250,11 +200,11 @@ void limiter_16(uint16_t * signal_arr, size_t signal_arr_count)
     	ctrl_factor_smooth = (1.0f - k) * ctrl_factor_smooth + k * ctrl_factor;
     	ctrl_factor_old = ctrl_factor;
 
-    	signal_arr[i] = (uint16_t)(signal_arr[i] * ctrl_factor_smooth);
+    	dst_signal_arr[i] = (uint16_t)(src_signal_arr[i] * ctrl_factor_smooth);
     }
 }
 
-void compressor_expander_ngate_8(uint8_t * signal_arr, size_t signal_arr_count)
+void compressor_expander_ngate_u16(uint16_t * src_signal_arr, uint16_t * dst_signal_arr, size_t signal_arr_count)
 {
 	float x_rms_pow2 = 0.0f;
 	float x_rms_log = 0.0f;
@@ -264,69 +214,10 @@ void compressor_expander_ngate_8(uint8_t * signal_arr, size_t signal_arr_count)
 	float ctrl_factor_smooth = 0.0f;
 	float k = 0.0f;
 
-    for (uint32_t i = 0U; i < signal_arr_count; i++)
+	/* left channel */
+    for (uint32_t i = 0U; i < signal_arr_count; i += 2U)
     {
-    	x_rms_pow2 = (one_minus_TAV * x_rms_pow2 + TAV * signal_arr[i] * signal_arr[i]);
-
-#ifdef PQ_USED
-    	LOG2(&x_rms_pow2, &x_rms_log);
-    	x_rms_log *= 0.5f;
-#else
-    	x_rms_log = 0.5f * LOG2(x_rms_pow2);
-#endif
-
-    	if (x_rms_log > log2_CT)
-    	{
-//    		ctrl_factor = powf(2.0f, -CS * (x_rms_log - log2_CT));
-    		ctrl_factor_sqrt = -CS * (x_rms_log - log2_CT);
-    		ctrl_factor = ctrl_factor_sqrt * ctrl_factor_sqrt;
-    	}
-    	else if (x_rms_log >= log2_ET)
-    	{
-    		ctrl_factor = 1.0f;
-    	}
-    	else if (x_rms_log >= log2_NT)
-    	{
-//    		ctrl_factor = powf(2.0f, -ES * (x_rms_log - log2_ET));
-    		ctrl_factor_sqrt = -ES * (x_rms_log - log2_ET);
-    		ctrl_factor = ctrl_factor_sqrt * ctrl_factor_sqrt;
-    	}
-    	else
-    	{
-//    		ctrl_factor = powf(2.0f, -NS * (x_rms_log - log2_NT) + ES_times_diff_ET_NT);
-    		ctrl_factor_sqrt = -NS * (x_rms_log - log2_NT) + ES_times_diff_ET_NT;
-    		ctrl_factor = ctrl_factor_sqrt * ctrl_factor_sqrt;
-    	}
-
-    	if (ctrl_factor < ctrl_factor_old)
-    	{
-    		k = RT;
-    	}
-    	else
-    	{
-    		k = AT;
-    	}
-
-    	ctrl_factor_smooth = (1.0f - k) * ctrl_factor_smooth + k * ctrl_factor;
-    	ctrl_factor_old = ctrl_factor;
-
-    	signal_arr[i] = (uint8_t)(signal_arr[i] * ctrl_factor_smooth);
-    }
-}
-
-void compressor_expander_ngate_16(uint16_t * signal_arr, size_t signal_arr_count)
-{
-	float x_rms_pow2 = 0.0f;
-	float x_rms_log;
-	float ctrl_factor = 0.0f;
-	float ctrl_factor_sqrt = 0.0f;
-	float ctrl_factor_old = 0.0f;
-	float ctrl_factor_smooth = 0.0f;
-	float k = 0.0f;
-
-    for (uint32_t i = 0U; i < signal_arr_count; i += 2 )
-    {
-    	x_rms_pow2 = (one_minus_TAV * x_rms_pow2 + TAV * signal_arr[i] * signal_arr[i]);
+    	x_rms_pow2 = (one_minus_TAV * x_rms_pow2 + TAV * src_signal_arr[i] * src_signal_arr[i]);
 
 #ifdef PQ_USED
     	LOG2(&x_rms_pow2, &x_rms_log);
@@ -367,16 +258,17 @@ void compressor_expander_ngate_16(uint16_t * signal_arr, size_t signal_arr_count
     	ctrl_factor_smooth = (1.0f - k) * ctrl_factor_smooth + k * ctrl_factor;
     	ctrl_factor_old = ctrl_factor;
 
-    	signal_arr[i] = (uint16_t)(signal_arr[i] * ctrl_factor_smooth);
+    	dst_signal_arr[i] = (uint16_t)(src_signal_arr[i] * ctrl_factor_smooth);
     }
 
 	x_rms_pow2 = 0.0f;
 	ctrl_factor_old = 0.0f;
 	ctrl_factor_smooth = 0.0f;
 
-    for (uint32_t i = 1U; i < signal_arr_count; i += 2 )
+	/* right channel */
+    for (uint32_t i = 1U; i < signal_arr_count; i += 2U)
     {
-    	x_rms_pow2 = (one_minus_TAV * x_rms_pow2 + TAV * signal_arr[i] * signal_arr[i]);
+    	x_rms_pow2 = (one_minus_TAV * x_rms_pow2 + TAV * src_signal_arr[i] * src_signal_arr[i]);
 
 #ifdef PQ_USED
     	LOG2(&x_rms_pow2, &x_rms_log);
@@ -417,6 +309,59 @@ void compressor_expander_ngate_16(uint16_t * signal_arr, size_t signal_arr_count
     	ctrl_factor_smooth = (1.0f - k) * ctrl_factor_smooth + k * ctrl_factor;
     	ctrl_factor_old = ctrl_factor;
 
-    	signal_arr[i] = (uint16_t)(signal_arr[i] * ctrl_factor_smooth);
+    	dst_signal_arr[i] = (uint16_t)(src_signal_arr[i] * ctrl_factor_smooth);
     }
+}
+
+void fir_filter_u16(uint16_t * src_signal_arr, uint16_t * dst_signal_arr, size_t signal_arr_count)
+{
+	static uint16_t prev_samples[FIR_ORDER * 2] = { [0 ... ((FIR_ORDER * 2) - 1)] = const_comp };
+	uint32_t old_samples = FIR_ORDER;
+	float temp_sum = 0.0f;
+
+	/* left channel */
+	for (uint32_t i = 0U; i < signal_arr_count; i += 2U)
+	{
+    	if (i == 40U)
+    	{
+    		__NOP();
+    	}
+		for (uint32_t j = 0; j < FIR_COEFF_COUNT; j++)
+		{
+			if (j < old_samples)
+			{
+				temp_sum += prev_samples[i + (2 * j)] * fir_filter_coeff[j];
+			}
+			else
+			{
+				temp_sum += src_signal_arr[i - (2 * (FIR_ORDER - j))] * fir_filter_coeff[j];
+			}
+		}
+		dst_signal_arr[i] = (uint16_t)temp_sum;
+		temp_sum = 0.0f;
+		(old_samples > 0) ? old_samples-- : 0u;
+	}
+
+	old_samples = FIR_ORDER;
+
+	/* right channel */
+	for (uint32_t i = 1U; i < signal_arr_count; i += 2U)
+	{
+		for (int32_t j = 0; j < FIR_COEFF_COUNT; j++)
+		{
+			if (j < old_samples)
+			{
+				temp_sum += prev_samples[i + (2 * j)] * fir_filter_coeff[j];
+			}
+			else
+			{
+				temp_sum += src_signal_arr[i - (2 * (FIR_ORDER - j))] * fir_filter_coeff[j];
+			}
+		}
+		dst_signal_arr[i] = (uint16_t)temp_sum;
+		temp_sum = 0.0f;
+		(old_samples > 0) ? old_samples-- : 0u;
+	}
+
+	memcpy(&prev_samples[0], &src_signal_arr[signal_arr_count - (2 * FIR_ORDER)], (2 * FIR_ORDER * sizeof(src_signal_arr[0])));
 }
