@@ -12,8 +12,10 @@
  * Definitions
  ******************************************************************************/
 #define MATCH_VAL_MS					0.1
-#define TICKS_TO_MS(t)					((t) * (MATCH_VAL_MS))
-#define TICKS_TO_US(t)					((t) * (MATCH_VAL_MS) * 1000)
+#define CTIMER_TICKS_TO_MS(t)			((t) * (MATCH_VAL_MS))
+#define CTIMER_TICKS_TO_US(t)			((t) * (MATCH_VAL_MS) * 1000.0)
+#define CYCLES_TO_MS(c)					((c) * 1000.0 / (SystemCoreClock))
+#define CYCLES_TO_US(c)					((c) * 1000000.0 / (SystemCoreClock))
 
 /*******************************************************************************
  * Prototypes

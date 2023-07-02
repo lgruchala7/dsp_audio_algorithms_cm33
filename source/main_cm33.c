@@ -166,7 +166,7 @@ static void init_hifi4_operation(void)
     {
     }
 
-    PRINTF("\r\n[HiFi4] Average time: %.3f ms\r\n", (TICKS_TO_MS(hifi4_ctrl.exec_time_sum) / (float)ITER_COUNT));
+    PRINTF("\r\n[HiFi4] Average time: %.3f ms\r\n", CYCLES_TO_MS(hifi4_ctrl.exec_time_sum) / (float)ITER_COUNT);
 }
 
 static void setup_ctimer(ctimer_config_t * config, CTIMER_Type * base,
@@ -237,7 +237,7 @@ static void RxCallback(I2S_Type *base, i2s_dma_handle_t *handle, status_t comple
 
 	if (last_time == 0UL)
 	{
-		last_time = ctimer_ticks;
+		last_time = MSDK_GetCpuCycleCount();
 	}
 
 	if (isIntA)
@@ -254,7 +254,7 @@ static void RxCallback(I2S_Type *base, i2s_dma_handle_t *handle, status_t comple
 //    compressor_expander_ngate_u16((uint16_t *)transfer->data, transfer->dataSize);
     if (counter == 1000 && !isIntA)
     {
-    	PRINTF("Time between interrupts for transfer 1: %.3f\r\n", TICKS_TO_MS(ctimer_ticks - last_time)/1000.0);
+    	PRINTF("Time between interrupts for transfer 1: %.3f ms\r\n", CYCLES_TO_MS(MSDK_GetCpuCycleCount() - last_time)/1000.0);
     }
 }
 
@@ -351,7 +351,7 @@ static void configure_ctimer(void)
 	matchConfig0.outPinInitState    = false;
 	matchConfig0.enableInterrupt    = true;
 
-	setup_ctimer(&ctimer_config, CTIMER, &matchConfig0, CTIMER_MAT0_OUT);
+//	setup_ctimer(&ctimer_config, CTIMER, &matchConfig0, CTIMER_MAT0_OUT);
 }
 
 static void configure_clocks(void)
@@ -387,7 +387,7 @@ void APP_MU_IRQHandler(void)
         if (curSend < MSG_LENGTH)
         {
             MU_SendMsgNonBlocking(APP_MU, CHN_MU_REG_NUM, msgSend[curSend++]);
-            hifi4_ctrl.start_time = ctimer_ticks;
+            hifi4_ctrl.start_time = MSDK_GetCpuCycleCount();
         }
         else
         {
@@ -399,7 +399,7 @@ void APP_MU_IRQHandler(void)
         if (curRecv < MSG_LENGTH)
         {
             msgRecv[curRecv++] = MU_ReceiveMsgNonBlocking(APP_MU, CHN_MU_REG_NUM);
-            hifi4_ctrl.exec_time_sum = ctimer_ticks - hifi4_ctrl.start_time;
+            hifi4_ctrl.exec_time_sum = MSDK_GetCpuCycleCount() - hifi4_ctrl.start_time;
             hifi4_ctrl.is_hifi4_processing = false;
         }
         else
@@ -450,6 +450,8 @@ int main(void)
     PRINTF("Configure CTIMER\r\n");
     configure_ctimer();
 
+    MSDK_EnableCpuCycleCounter();
+
     calculate_coefficients();
 
     /* measure algorithms execution time */
@@ -474,7 +476,7 @@ int main(void)
 
 //    init_hifi4_operation();
 
-//    test_algorithm(fir_filter_u16, (uint16_t *)src_test_arr_16, (uint16_t *)dst_test_arr_16, TEST_ARR_SIZE, DEMO_AUDIO_SAMPLE_RATE);
+    test_algorithm(fir_filter_u16, (uint16_t *)src_test_arr_16, (uint16_t *)dst_test_arr_16, TEST_ARR_SIZE, DEMO_AUDIO_SAMPLE_RATE);
     PRINTF("\r\nfir_filter_u16:\r\n");
     measure_algorithm_time_u16(fir_filter_u16, (uint16_t *)src_buffer_1, (uint16_t *)dst_buffer_1, (BUFFER_SIZE / 2), ITER_COUNT);
 

@@ -10,6 +10,7 @@
  ******************************************************************************/
 
 #include "fsl_debug_console.h"
+#include "fsl_device_registers.h"
 
 #include "arm_math.h"
 #include "fsl_powerquad.h"
@@ -57,8 +58,8 @@ static void init_arr_with_rand_float(float * arr, size_t arr_size)
 static void generate_sine_wave_u16(uint16_t * input_vec, uint32_t vec_len, uint32_t fs)
 {
 	float offset = (UINT16_MAX / 2);
-	float freq[FREQ_COUNT] = {10000.0f, 7000.0f, 2000.0f};
-	float amp[FREQ_COUNT] = {1.0f, 1.5f, 0.2f};
+	float freq[FREQ_COUNT] = {9000.0f, 70000.0f, 1500.0f};
+	float amp[FREQ_COUNT] = {0.2f, 0.2f, 1.0f};
 	float rad[FREQ_COUNT] = {0.0f};
 	float comp[FREQ_COUNT] = {0.0f};
 	float temp_comp_sum = 0.0f;
@@ -91,12 +92,6 @@ static void generate_sine_wave_u16(uint16_t * input_vec, uint32_t vec_len, uint3
 		}
 		temp_comp_sum /= amp_sum;
 		input_vec[i] = (uint16_t)(offset + temp_comp_sum);
-
-//		rad[0] = (2 * PI * freq[0] * i / fs);
-//		rad[1] = (2 * PI * freq[1] * i / fs);
-//		comp[0] = (offset * amp[0] * arm_sin_f32(rad[0]));
-//		comp[1] = (offset * amp[1] * arm_sin_f32(rad[1]));
-//		input_vec[i] += (uint16_t)(offset + ((comp[0] + comp[1]) / FREQ_COUNT));
 	}
 }
 
@@ -105,33 +100,19 @@ void measure_algorithm_time_u16(void (*algorithm_func)(uint16_t *, uint16_t *, s
 	volatile unsigned long previous_time = 0UL;
     unsigned long exec_time_ticks = 0UL;
     unsigned long exec_time_ticks_sum = 0UL;
-    unsigned long max_time_ticks = 0UL;
 
     // write random values to buffer
     init_arr_with_rand_u16(src_buffer, buffer_size);
 
-	previous_time = ctimer_ticks;
+	previous_time = MSDK_GetCpuCycleCount();
+    // execute algorithm 'iterations' times
 	for (int i = 0; i < iterations; i++)
 	{
 		algorithm_func(src_buffer, dst_buffer, buffer_size);
 	}
-	exec_time_ticks_sum = (ctimer_ticks - previous_time);
+	exec_time_ticks_sum = (MSDK_GetCpuCycleCount() - previous_time);
 
-    // execute algorithm 'iterations' times
-//    for (int i = 0; i < iterations; i++)
-//    {
-//		previous_time = ctimer_ticks;
-//		algorithm_func(src_buffer, dst_buffer, buffer_size);
-//		exec_time_ticks = (ctimer_ticks - previous_time);
-//		exec_time_ticks_sum += exec_time_ticks;
-//		if (exec_time_ticks > max_time_ticks)
-//		{
-//			max_time_ticks = exec_time_ticks;
-//		}
-//	}
-
-    // print calculated values
-    PRINTF("Average time: %.3f ms\r\n", (TICKS_TO_MS(exec_time_ticks_sum) / (float)iterations));
+    PRINTF("Average time: %.3f ms\r\n", (exec_time_ticks_sum * 1000.0f / SystemCoreClock) / (float)iterations);
 }
 
 void test_pq_math(float * arr, uint32_t iterations)
@@ -146,39 +127,39 @@ void test_pq_math(float * arr, uint32_t iterations)
 
 	init_arr_with_rand_float(arr, iterations);
 
-	previous_time = ctimer_ticks;
+	previous_time = MSDK_GetCpuCycleCount();
 	for (int i = 0; i < iterations; i++)
 	{
 		PQ_DivF32(&x1, &arr[i], (float *)&result);
 	}
-	exec_time_ticks_sum = (ctimer_ticks - previous_time);
+	exec_time_ticks_sum = (MSDK_GetCpuCycleCount() - previous_time);
 
-	PRINTF("[PQ] Average time x1/x2: %.3f us\r\n", (TICKS_TO_US(exec_time_ticks_sum) / (float)iterations));
+	PRINTF("[PQ] Average time x1/x2: %.3f us\r\n", (CYCLES_TO_US(exec_time_ticks_sum) / (float)iterations));
 
-	previous_time = ctimer_ticks;
+	previous_time = MSDK_GetCpuCycleCount();
 	for (int i = 0; i < iterations; i++)
 	{
 		result = x1 / arr[i];
 	}
-	exec_time_ticks_sum = (ctimer_ticks - previous_time);
-	PRINTF("[CM-33] Average time x1/x2: %.3f us\r\n", (TICKS_TO_US(exec_time_ticks_sum) / (float)iterations));
+	exec_time_ticks_sum = (MSDK_GetCpuCycleCount() - previous_time);
+	PRINTF("[CM-33] Average time x1/x2: %.3f us\r\n", (CYCLES_TO_US(exec_time_ticks_sum) / (float)iterations));
 
 
-	previous_time = ctimer_ticks;
+	previous_time = MSDK_GetCpuCycleCount();
 	for (int i = 0; i < iterations; i++)
 	{
 		PQ_LnF32(&arr[i], (float *)&result);
 	}
-	exec_time_ticks_sum = (ctimer_ticks - previous_time);
-	PRINTF("[PQ] Average time ln: %.3f us\r\n", (TICKS_TO_US(exec_time_ticks_sum) / (float)iterations));
+	exec_time_ticks_sum = (MSDK_GetCpuCycleCount() - previous_time);
+	PRINTF("[PQ] Average time ln: %.3f us\r\n", (CYCLES_TO_US(exec_time_ticks_sum) / (float)iterations));
 
-	previous_time = ctimer_ticks;
+	previous_time = MSDK_GetCpuCycleCount();
 	for (int i = 0; i < iterations; i++)
 	{
 		result = logf(arr[i]);
 	}
-	exec_time_ticks_sum = (ctimer_ticks - previous_time);
-	PRINTF("[CM-33] Average time ln: %.3f us\r\n", (TICKS_TO_US(exec_time_ticks_sum) / (float)iterations));
+	exec_time_ticks_sum = (MSDK_GetCpuCycleCount() - previous_time);
+	PRINTF("[CM-33] Average time ln: %.3f us\r\n", (CYCLES_TO_US(exec_time_ticks_sum) / (float)iterations));
 }
 
 void print_buffer_data_u16(uint16_t * data, size_t data_size)
