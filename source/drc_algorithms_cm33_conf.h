@@ -12,13 +12,17 @@
 #define PQ_USED
 
 /* attack time */
-const float t_at_ms 	= 0.1f;
+const float t_at_ms 	= 1.0f;
+/* attack time ctrl_factor */
+const float t_at_cf_ms 	= 0.1f;
 /* release time */
-const float t_re_ms 	= 5.0f;
+const float t_re_ms 	= 50.0f;
+/* release time ctrl_factor */
+const float t_re_cf_ms 	= 5.0f;
 /* averaging time */
-const float t_tav_ms 	= 0.1f;
+const float t_tav_ms 	= 3.33f;
 /* sampling frequency in Hz*/
-const float fs_hz 		= 44100.0f;
+const float fs_hz 		= 48000.0f;
 /* limiter slope */
 const float LS 			= 1.0f;
 /* compressor slope */
@@ -30,19 +34,21 @@ const float NS 			= -10.0f;
 
 #ifdef _16_bit
 /* limiter threshold */
-const float LT = 51400.0f;
+const float LT = (float)(INT16_MAX * 0.8f * 0.707f);
 /* compressor threshold */
-const float CT = 38550.0f;
+const float CT = (float)(INT16_MAX * 0.6f * 0.707f);
 /* expander threshold */
-const float ET = 25700.0f;
+const float ET = (float)(INT16_MAX * 0.4f * 0.707f);
 /* noise gate threshold */
-const float NT = 12850.0f;
+const float NT = (float)(INT16_MAX * 0.2f * 0.707f);
 #else
 const float LT = 200.0f;
 const float CT = 150.0f;
 const float ET = 100.0f;
 const float NT = 50.0f;
 #endif
+
+const static float LN_OF_2 = 0.693147f;
 
 #define FIR_ORDER		256U
 #define FIR_COEFF_COUNT	(FIR_ORDER + 1U)

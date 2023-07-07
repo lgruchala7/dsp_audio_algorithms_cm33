@@ -37,12 +37,12 @@
 /*******************************************************************************
  * Code
  ******************************************************************************/
-static void init_arr_with_rand_u16(uint16_t * arr, size_t arr_size)
+static void init_arr_with_rand_16(int16_t * arr, size_t arr_size)
 {
 	srand(time(NULL));
     for (int i = 0 ; i < arr_size ; i++)
     {
-    	arr[i] = (uint16_t)(rand() % UINT16_MAX);
+    	arr[i] = (int16_t)((rand() % INT16_MAX) - INT16_MAX);
     }
 }
 
@@ -55,17 +55,21 @@ static void init_arr_with_rand_float(float * arr, size_t arr_size)
     }
 }
 
-static void generate_sine_wave_u16(uint16_t * input_vec, uint32_t vec_len, uint32_t fs)
+static void generate_sine_wave_16(int16_t * input_vec, uint32_t vec_len, uint32_t fs, float max_amplitude, float * freq, float * amp, int freq_count)
 {
-	float offset = (UINT16_MAX / 2);
-	float freq[FREQ_COUNT] = {9000.0f, 70000.0f, 1500.0f};
-	float amp[FREQ_COUNT] = {0.2f, 0.2f, 1.0f};
-	float rad[FREQ_COUNT] = {0.0f};
-	float comp[FREQ_COUNT] = {0.0f};
-	float temp_comp_sum = 0.0f;
-	float amp_sum = 0.0f;
+//	float freq[FREQ_COUNT] 	= {9000.0f, 70000.0f, 1500.0f};
+//	float amp[FREQ_COUNT] 	= {0.0f, 0.0f, 1.0f};
+	float * rad 	= (float *)malloc(sizeof(float) * freq_count);
+	float * comp = (float *)malloc(sizeof(float) * freq_count);
+	float temp_comp_sum 	= 0.0f;
+	float amp_sum 			= 0.0f;
 
-	for (uint32_t i = 0U; i < FREQ_COUNT; i++)
+	if (max_amplitude > (float)INT16_MAX)
+	{
+		PRINTF("\r\nChange amplitude!!!\r\n");
+	}
+
+	for (uint32_t i = 0U; i < freq_count; i++)
 	{
 		amp_sum += amp[i];
 	}
@@ -73,36 +77,38 @@ static void generate_sine_wave_u16(uint16_t * input_vec, uint32_t vec_len, uint3
 	for (uint32_t i = 0U, sample_num = 0U; i < vec_len; i += 2, sample_num++)
 	{
 		/* convert to radians */
-		for (uint32_t j = 0U; j < FREQ_COUNT; j++)
+		for (uint32_t j = 0U; j < freq_count; j++)
 		{
 			rad[j] = (2 * PI * freq[j] * sample_num / fs);
 		}
 
 		/* calculate component signals values */
-		for (uint32_t j = 0U; j < FREQ_COUNT; j++)
+		for (uint32_t j = 0U; j < freq_count; j++)
 		{
-			comp[j] = (offset * amp[j] * arm_sin_f32(rad[j]));
+			comp[j] = (max_amplitude * amp[j] * arm_sin_f32(rad[j]));
 		}
 
 		temp_comp_sum = 0.0f;
 		/* sum component signals */
-		for (uint32_t j = 0U; j < FREQ_COUNT; j++)
+		for (uint32_t j = 0U; j < freq_count; j++)
 		{
 			temp_comp_sum += comp[j];
 		}
-		temp_comp_sum /= amp_sum;
-		input_vec[i] = (uint16_t)(offset + temp_comp_sum);
+		input_vec[i] = (int16_t)(temp_comp_sum / amp_sum);
 	}
+
+	free(rad);
+	free(comp);
 }
 
-void measure_algorithm_time_u16(void (*algorithm_func)(uint16_t *, uint16_t *, size_t), uint16_t * src_buffer, uint16_t * dst_buffer, size_t buffer_size, uint32_t iterations)
+void measure_algorithm_time_16(void (*algorithm_func)(int16_t *, int16_t *, size_t), int16_t * src_buffer, int16_t * dst_buffer, size_t buffer_size, uint32_t iterations)
 {
 	volatile unsigned long previous_time = 0UL;
     unsigned long exec_time_ticks = 0UL;
     unsigned long exec_time_ticks_sum = 0UL;
 
     // write random values to buffer
-    init_arr_with_rand_u16(src_buffer, buffer_size);
+    init_arr_with_rand_16(src_buffer, buffer_size);
 
 	previous_time = MSDK_GetCpuCycleCount();
     // execute algorithm 'iterations' times
@@ -112,7 +118,7 @@ void measure_algorithm_time_u16(void (*algorithm_func)(uint16_t *, uint16_t *, s
 	}
 	exec_time_ticks_sum = (MSDK_GetCpuCycleCount() - previous_time);
 
-    PRINTF("Average time: %.3f ms\r\n", (exec_time_ticks_sum * 1000.0f / SystemCoreClock) / (float)iterations);
+    PRINTF("Average time: %.3f ms\r\n", (CYCLES_TO_MS(exec_time_ticks_sum)) / (float)iterations);
 }
 
 void test_pq_math(float * arr, uint32_t iterations)
@@ -162,11 +168,12 @@ void test_pq_math(float * arr, uint32_t iterations)
 	PRINTF("[CM-33] Average time ln: %.3f us\r\n", (CYCLES_TO_US(exec_time_ticks_sum) / (float)iterations));
 }
 
-void print_buffer_data_u16(uint16_t * data, size_t data_size)
+void print_buffer_data_16(int16_t * data, size_t data_size)
 {
 	for (size_t i = 0; i < data_size; i++)
 	{
-		PRINTF("0x%0X, ", data[i]);
+//		PRINTF("0x%0X, ", data[i]);
+		PRINTF("%d, ", data[i]);
 		if (i%20 == 19)
 		{
 			PRINTF("\r\n");
@@ -175,11 +182,29 @@ void print_buffer_data_u16(uint16_t * data, size_t data_size)
 	PRINTF("\r\n\n");
 }
 
-void test_algorithm(void (*algorithm_func)(uint16_t *, uint16_t *, size_t), uint16_t * src_buffer, uint16_t * dst_buffer, size_t buffer_size, uint32_t fs)
+void write_buffer_data_to_file_16(int16_t * data, size_t data_size)
 {
-    generate_sine_wave_u16(src_buffer, buffer_size, fs);
-    print_buffer_data_u16(src_buffer, buffer_size);
-    algorithm_func(src_buffer, dst_buffer, buffer_size);
-    print_buffer_data_u16(dst_buffer, buffer_size);
+	PRINTF("$");
+	for (size_t i = 0; i < data_size; i++)
+	{
+		PRINTF("%d, ", data[i]);
+		if (i%20 == 19)
+		{
+			PRINTF("\r\n");
+		}
+	}
+}
 
+void test_algorithm(void (*algorithm_func)(int16_t *, int16_t *, size_t), int16_t * src_buffer, int16_t * dst_buffer,
+		size_t buffer_size, uint32_t fs, float * freq, float * amp, int freq_count)
+{
+	generate_sine_wave_16(&src_buffer[0], buffer_size/5, fs, (float)INT16_MAX * 0.15, freq, amp, freq_count);
+	generate_sine_wave_16(&src_buffer[1000],buffer_size/5, fs, (float)INT16_MAX * 0.40, freq, amp, freq_count);
+	generate_sine_wave_16(&src_buffer[2000], buffer_size/5, fs, (float)INT16_MAX * 0.65, freq, amp, freq_count);
+	generate_sine_wave_16(&src_buffer[3000], buffer_size/5, fs, (float)INT16_MAX * 0.8, freq, amp, freq_count);
+	generate_sine_wave_16(&src_buffer[4000], buffer_size/5, fs, (float)INT16_MAX * 0.95, freq, amp, freq_count);
+
+	write_buffer_data_to_file_16(src_buffer, buffer_size);
+	algorithm_func(src_buffer, dst_buffer, buffer_size);
+	write_buffer_data_to_file_16(dst_buffer, buffer_size);
 }

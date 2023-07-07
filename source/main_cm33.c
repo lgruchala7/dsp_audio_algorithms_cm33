@@ -53,7 +53,7 @@
 #define DEMO_CODEC_I2C_BASEADDR         I2C2
 //#define DEMO_CODEC_I2C_INSTANCE         2U
 #define DEMO_CODEC_VOLUME               100U
-#define BUFFER_SIZE					400
+#define BUFFER_SIZE						200
 #define DMA_DESCRIPTOR_NUM      		2U
 #define I2S_TRANSFER_NUM      			2U
 
@@ -64,7 +64,7 @@
 
 #define DEMO_POWERQUAD 					POWERQUAD
 
-#define TEST_ARR_SIZE		1000
+#define TEST_ARR_SIZE		5000
 #define ITER_COUNT			TEST_ARR_SIZE
 
 #define APP_MU            	MUA
@@ -117,10 +117,10 @@ volatile uint32_t curRecv = 0;
 
 DMA_ALLOCATE_LINK_DESCRIPTORS(txDmaDescriptors, DMA_DESCRIPTOR_NUM);
 DMA_ALLOCATE_LINK_DESCRIPTORS(rxDmaDescriptors, DMA_DESCRIPTOR_NUM);
-__ALIGN_BEGIN static uint8_t src_buffer_1[BUFFER_SIZE] __ALIGN_END; /* 100 samples => time about 2 ms */
-__ALIGN_BEGIN static uint8_t src_buffer_2[BUFFER_SIZE] __ALIGN_END;
-__ALIGN_BEGIN static uint8_t dst_buffer_1[BUFFER_SIZE] __ALIGN_END;
-__ALIGN_BEGIN static uint8_t dst_buffer_2[BUFFER_SIZE] __ALIGN_END;
+__ALIGN_BEGIN static int16_t src_buffer_1[BUFFER_SIZE] __ALIGN_END; /* 100 samples => time about 2 ms */
+__ALIGN_BEGIN static int16_t src_buffer_2[BUFFER_SIZE] __ALIGN_END;
+__ALIGN_BEGIN static int16_t dst_buffer_1[BUFFER_SIZE] __ALIGN_END;
+__ALIGN_BEGIN static int16_t dst_buffer_2[BUFFER_SIZE] __ALIGN_END;
 static dma_handle_t dmaTxHandle;
 static dma_handle_t dmaRxHandle;
 static i2s_config_t txConfig;
@@ -139,8 +139,8 @@ ctimer_config_t ctimer_config;
 ctimer_callback_t ctimer_callback = ctimer_match0_callback;
 
 static float test_arr [TEST_ARR_SIZE] = {0.0f};
-static volatile uint16_t src_test_arr_16[TEST_ARR_SIZE] = {0};
-static volatile uint16_t dst_test_arr_16[TEST_ARR_SIZE] = {0};
+static volatile int16_t src_test_arr_16[TEST_ARR_SIZE] = {0};
+static volatile int16_t dst_test_arr_16[TEST_ARR_SIZE] = {0};
 
 /*******************************************************************************
  * Code
@@ -193,16 +193,16 @@ static void start_digital_loopback(void)
 
     PRINTF("Setup digital loopback\r\n");
 
-    rxTransfer[0].data     = &src_buffer_1[0];
+    rxTransfer[0].data     = (uint8_t *)&src_buffer_1[0];
     rxTransfer[0].dataSize = sizeof(src_buffer_1);
 
-    rxTransfer[1].data     = &src_buffer_2[0];
+    rxTransfer[1].data     = (uint8_t *)&src_buffer_2[0];
     rxTransfer[1].dataSize = sizeof(src_buffer_2);
 
-    txTransfer[0].data     = &dst_buffer_1[0];
+    txTransfer[0].data     = (uint8_t *)&dst_buffer_1[0];
     txTransfer[0].dataSize = sizeof(dst_buffer_1);
 
-    txTransfer[1].data     = &dst_buffer_2[0];
+    txTransfer[1].data     = (uint8_t *)&dst_buffer_2[0];
     txTransfer[1].dataSize = sizeof(dst_buffer_2);
 
     I2S_RxTransferCreateHandleDMA(DEMO_I2S_RX, &rxHandle, &dmaRxHandle, RxCallback, (void *)&rxTransfer[0]);
@@ -251,7 +251,7 @@ static void RxCallback(I2S_Type *base, i2s_dma_handle_t *handle, status_t comple
 	}
 
     i2s_transfer_t *transfer = (i2s_transfer_t *)userData;
-//    compressor_expander_ngate_u16((uint16_t *)transfer->data, transfer->dataSize);
+//    compressor_expander_ngate_16((int16_t *)transfer->data, transfer->dataSize);
     if (counter == 1000 && !isIntA)
     {
     	PRINTF("Time between interrupts for transfer 1: %.3f ms\r\n", CYCLES_TO_MS(MSDK_GetCpuCycleCount() - last_time)/1000.0);
@@ -447,26 +447,23 @@ int main(void)
     PRINTF("Configure DMA\r\n");
     configure_dma();
 
-    PRINTF("Configure CTIMER\r\n");
-    configure_ctimer();
-
     MSDK_EnableCpuCycleCounter();
 
     calculate_coefficients();
 
-    /* measure algorithms execution time */
-    PRINTF("\r\nlimiter_u16:\r\n");
-    measure_algorithm_time_u16(limiter_u16, (uint16_t *)src_buffer_1, (uint16_t *)dst_buffer_1, (BUFFER_SIZE / 2), ITER_COUNT);
-    PRINTF("\r\ncompressor_expander_ngate_u16:\r\n");
-    measure_algorithm_time_u16(compressor_expander_ngate_u16, (uint16_t *)src_buffer_1, (uint16_t *)dst_buffer_1, (BUFFER_SIZE / 2), ITER_COUNT);
+    /*test algorithms and measure execution time */
+	float freq[] 	= {9000.0f, 7000.0f, 1500.0f};
+	float amp[] 	= {0.1f, 0.2f, 2.0f};
+//    PRINTF("\r\nlimiter_16:\r\n");
+//    measure_algorithm_time_16(limiter_16, (int16_t *)src_buffer_1, (int16_t *)dst_buffer_1, (BUFFER_SIZE / 2), ITER_COUNT);
+    test_algorithm(limiter_16, (int16_t *)src_test_arr_16, (int16_t *)dst_test_arr_16, TEST_ARR_SIZE, DEMO_AUDIO_SAMPLE_RATE,
+    		freq, amp, (sizeof(freq) / sizeof(freq[0])));
+//    PRINTF("\r\ncompressor_expander_ngate_16:\r\n");
+//    measure_algorithm_time_16(compressor_expander_ngate_16, (int16_t *)src_buffer_1, (int16_t *)dst_buffer_1, (BUFFER_SIZE / 2), ITER_COUNT);
+//    PRINTF("\r\nfir_filter_16:\r\n");
+//    measure_algorithm_time_16(fir_filter_16, (int16_t *)src_buffer_1, (int16_t *)dst_buffer_1, (BUFFER_SIZE / 2), ITER_COUNT);
 
 //    start_digital_loopback();
-
-    /* check if algorithms work correctly */
-//    init_arr_with_rand_16((uint16_t *)src_buffer_1, (BUFFER_SIZE / 2));
-//    print_buffer_data_u16((uint16_t *)src_buffer_1, (BUFFER_SIZE / 2));
-//    compressor_expander_ngate_u16((uint16_t *)src_buffer_1, (uint16_t *)dst_buffer_1, (BUFFER_SIZE / 2));
-//    print_buffer_data_u16((uint16_t *)dst_buffer_1, (BUFFER_SIZE / 2));
 
 //	for (int var = 0; var < 5; ++var)
 //	{
@@ -476,10 +473,8 @@ int main(void)
 
 //    init_hifi4_operation();
 
-    test_algorithm(fir_filter_u16, (uint16_t *)src_test_arr_16, (uint16_t *)dst_test_arr_16, TEST_ARR_SIZE, DEMO_AUDIO_SAMPLE_RATE);
-    PRINTF("\r\nfir_filter_u16:\r\n");
-    measure_algorithm_time_u16(fir_filter_u16, (uint16_t *)src_buffer_1, (uint16_t *)dst_buffer_1, (BUFFER_SIZE / 2), ITER_COUNT);
-
+    /* check if algorithms work correctly */
+PRINTF("\r\nCPU frequency: %d Hz\r\n", SystemCoreClock);
     while (1)
     {
     	__NOP();
