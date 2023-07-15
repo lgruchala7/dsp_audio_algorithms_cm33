@@ -88,13 +88,14 @@ outputs:
 - {id: FLEXSPI_clock.outFreq, value: 48 MHz}
 - {id: LPOSC1M_clock.outFreq, value: 1 MHz}
 - {id: OSTIMER_clock.outFreq, value: 1 MHz}
-- {id: System_clock.outFreq, value: 299.07 MHz, locked: true, accuracy: '0.001'}
-- {id: TRACE_clock.outFreq, value: 1944/13 MHz}
+- {id: System_clock.outFreq, value: 297 MHz, locked: true, accuracy: '0.001'}
+- {id: TRACE_clock.outFreq, value: 297 MHz}
 - {id: WAKE_32K_clock.outFreq, value: 31.25 kHz}
 settings:
 - {id: AUDIOPLL0_PFD0_CLK_GATE, value: Enabled}
 - {id: PFC0DIV_HALT, value: Enable}
 - {id: PLL0_PFD0_CLK_GATE, value: Enabled}
+- {id: PLL0_PFD1_CLK_GATE, value: Enabled}
 - {id: PLL0_PFD2_CLK_GATE, value: Enabled}
 - {id: SYSCON.AUDIOPLL0CLKSEL.sel, value: SYSCON.SYSOSCBYPASS}
 - {id: SYSCON.AUDIOPLL0_PFD0_DIV.scale, value: '26', locked: true}
@@ -108,16 +109,18 @@ settings:
 - {id: SYSCON.PFC0DIV.scale, value: '2', locked: true}
 - {id: SYSCON.PFC1DIV.scale, value: '1', locked: true}
 - {id: SYSCON.PLL0.denom, value: '1', locked: true}
-- {id: SYSCON.PLL0.div, value: '18', locked: true}
-- {id: SYSCON.PLL0.num, value: '0', locked: true}
-- {id: SYSCON.PLL0_PFD0_DIV.scale, value: '26', locked: true}
+- {id: SYSCON.PLL0.div, value: '21', locked: true}
+- {id: SYSCON.PLL0.num, value: '1', locked: true}
+- {id: SYSCON.PLL0_PFD0_DIV.scale, value: '16', locked: true}
 - {id: SYSCON.PLL0_PFD0_MUL.scale, value: '18', locked: true}
+- {id: SYSCON.PLL0_PFD1_DIV.scale, value: '16', locked: true}
+- {id: SYSCON.PLL0_PFD1_MUL.scale, value: '18', locked: true}
 - {id: SYSCON.PLL0_PFD2_DIV.scale, value: '24', locked: true}
 - {id: SYSCON.PLL0_PFD2_MUL.scale, value: '18', locked: true}
 - {id: SYSCON.PLL1.denom, value: '27000', locked: true}
 - {id: SYSCON.PLL1.div, value: '22'}
 - {id: SYSCON.PLL1.num, value: '5040', locked: true}
-- {id: SYSCON.SYSCPUAHBCLKDIV.scale, value: '1', locked: true}
+- {id: SYSCON.SYSCPUAHBCLKDIV.scale, value: '2', locked: true}
 - {id: SYSCON.SYSPLL0CLKSEL.sel, value: SYSCON.SYSOSCBYPASS}
 - {id: SYSCTL_PDRUNCFG_AUDIOPLL_CFG, value: 'No'}
 - {id: SYSCTL_PDRUNCFG_SYSPLL_CFG, value: 'No'}
@@ -134,9 +137,9 @@ sources:
 const clock_sys_pll_config_t g_sysPllConfig_BOARD_BootClockRUN =
     {
         .sys_pll_src = kCLOCK_SysPllXtalIn,       /* OSC clock */
-        .numerator = 0,                           /* Numerator of the SYSPLL0 fractional loop divider isnull */
+        .numerator = 1,                           /* Numerator of the SYSPLL0 fractional loop divider isnull */
         .denominator = 1,                         /* Denominator of the SYSPLL0 fractional loop divider isnull */
-        .sys_pll_mult = kCLOCK_SysPllMult18       /* Divide by 18 */
+        .sys_pll_mult = kCLOCK_SysPllMult21       /* Divide by 21 */
     };
 const clock_audio_pll_config_t g_audioPllConfig_BOARD_BootClockRUN =
     {
@@ -174,12 +177,15 @@ void BOARD_BootClockRUN(void)
 
     /* Configure SysPLL0 clock source */
     CLOCK_InitSysPll(&g_sysPllConfig_BOARD_BootClockRUN);
-    CLOCK_InitSysPfd(kCLOCK_Pfd0, 26);                /* Enable MAIN PLL clock */
+    CLOCK_InitSysPfd(kCLOCK_Pfd0, 16);                /* Enable MAIN PLL clock */
+    CLOCK_InitSysPfd(kCLOCK_Pfd1, 16);                /* Enable DSP PLL clock */
     CLOCK_InitSysPfd(kCLOCK_Pfd2, 24);                /* Enable AUX0 PLL clock */
 
     /* Configure Audio PLL clock source */
     CLOCK_InitAudioPll(&g_audioPllConfig_BOARD_BootClockRUN);
     CLOCK_InitAudioPfd(kCLOCK_Pfd0, 26);              /* Enable Audio PLL clock */
+
+    CLOCK_SetClkDiv(kCLOCK_DivSysCpuAhbClk, 2U);         /* Set SYSCPUAHBCLKDIV divider to value 2 */
 
     /* Set up clock selectors - Attach clocks to the peripheries */
     CLOCK_AttachClk(kMAIN_PLL_to_MAIN_CLK);                 /* Switch MAIN_CLK to MAIN_PLL */

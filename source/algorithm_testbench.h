@@ -9,6 +9,11 @@
 #define ALGORITHM_TESTBENCH_H_
 
 /*******************************************************************************
+ * Includes
+ ******************************************************************************/
+#include "arm_math.h"
+
+/*******************************************************************************
  * Definitions
  ******************************************************************************/
 #define MATCH_VAL_MS					0.1
@@ -23,8 +28,9 @@
 void measure_algorithm_time_16(void (*algorithm_func)(int16_t *, int16_t *, size_t), int16_t * src_buffer, int16_t * dst_buffer, size_t buffer_size, uint32_t iterations);
 void test_pq_math(float * arr, uint32_t iterations);
 void print_buffer_data_16(int16_t * data, size_t data_size);
-void test_algorithm(void (*algorithm_func)(int16_t *, int16_t *, size_t), int16_t * src_buffer, int16_t * dst_buffer,
-		size_t buffer_size, uint32_t fs, float * freq, float * amp, int freq_count);
+void test_drc_algorithm(void (*algorithm_func)(int16_t *, int16_t *, size_t), int16_t * src_buffer, int16_t * dst_buffer, size_t buffer_size, uint32_t fs);
+void print_buffer_data_f32(float32_t * buffer, size_t buffer_size);
+void test_cmsis_dsp(float32_t * src_arr, float32_t * dst_arr, uint32_t arr_size, uint32_t fs, uint32_t iterations);
 
 /*******************************************************************************
  * Exported variables

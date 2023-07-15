@@ -48,9 +48,6 @@
 /*******************************************************************************
  * Definitions
  ******************************************************************************/
-#define OK		0U
-#define NOT_OK 	1U
-
 #ifdef PQ_USED
 #define LOG2(p_src, p_dst) 	do { \
 								PQ_LnF32(p_src, p_dst); \
@@ -60,6 +57,7 @@
 #define LOG2(x) 				(logf(x) / LN_OF_2)
 
 #endif
+
 /*******************************************************************************
  * Prototypes
  ******************************************************************************/
@@ -72,6 +70,7 @@ enum {
 /*******************************************************************************
  * Variables
  ******************************************************************************/
+const static float LN_OF_2 = 0.693147f;
 static float AT;
 static float RT;
 static float RT_ctrl_fctr;
@@ -90,7 +89,7 @@ static float one_minus_TAV;
 /*******************************************************************************
  * Code
  ******************************************************************************/
-void check_coeff_validity(void)
+void check_coefficients(void)
 {
 	if (NT >= ET || ET >= CT || ES >= 0.0 || NS >= 0.0)
 	{
@@ -107,11 +106,12 @@ void calculate_coefficients(void)
 	AT_ctrl_fctr = (float)(1.0 - exp(-2.2 * 1000.0 / ((t_at_ms) * fs_hz)));
 	RT_ctrl_fctr = (float)(1.0 - exp(-2.2 * 1000.0 / ((t_re_ms) * fs_hz)));
 #ifdef PQ_USED
-	// casting to suppress discarded qualifier warning
-	LOG2((float *)&LT, &log2_LT);
-	LOG2((float *)&CT, &log2_CT);
-	LOG2((float *)&ET, &log2_ET);
-	LOG2((float *)&NT, &log2_NT);
+	/*  casting to suppress discarded qualifier warning */
+	float lt = LT, ct = CT, et = ET, nt = NT;
+	LOG2((float *)&lt, &log2_LT);
+	LOG2((float *)&ct, &log2_CT);
+	LOG2((float *)&et, &log2_ET);
+	LOG2((float *)&nt, &log2_NT);
 #else
 	log2_LT = LOG2(LT);
 	log2_CT = LOG2(CT);
@@ -136,12 +136,14 @@ void limiter_16(int16_t * src_signal_arr, int16_t * dst_signal_arr, size_t signa
 	float ctrl_factor_exp = 0.0f;
 	float k = 0.0f;
 
+#ifdef _DEBUG
 	PRINTF("$");
+#endif
 	for (uint32_t channel = 0; channel < CHANNEL_CNT; ++channel)
 	{
 		for (uint32_t i = channel; i < signal_arr_count; i += 2)
 		{
-			float abs_sample = fabs((float)src_signal_arr[i]);
+			float abs_sample = fabsf((float)src_signal_arr[i]);
 			if (abs_sample > x_peak[channel])
 			{
 				x_peak[channel] = one_minus_AT * x_peak[channel] + AT * abs_sample;
@@ -155,7 +157,7 @@ void limiter_16(int16_t * src_signal_arr, int16_t * dst_signal_arr, size_t signa
 		#ifdef PQ_USED
 			LOG2(&x_peak_abs, &x_peak_log);
 		#else
-			x_peak_log = LOG2(x_peak);
+			x_peak_log = LOG2(x_peak_abs);
 		#endif
 
 			if (x_peak_log > log2_LT)
@@ -179,7 +181,7 @@ void limiter_16(int16_t * src_signal_arr, int16_t * dst_signal_arr, size_t signa
 
 			ctrl_factor_smooth[channel] = (1.0f - k) * ctrl_factor_smooth[channel] + k * ctrl_factor;
 			ctrl_factor_old[channel] = ctrl_factor;
-
+#ifdef _DEBUG
 			if (channel == CHANNEL_LEFT)
 			{
 				PRINTF("%.3f, ", x_peak_log);
@@ -188,10 +190,12 @@ void limiter_16(int16_t * src_signal_arr, int16_t * dst_signal_arr, size_t signa
 					PRINTF("\r\n");
 				}
 			}
+#endif
 			dst_signal_arr[i] = (int16_t)(src_signal_arr[i] * ctrl_factor_smooth[channel]);
 		}
-
+#ifdef _DEBUG
 		PRINTF("\r\n");
+#endif
 	}
 }
 
@@ -206,18 +210,19 @@ void compressor_expander_ngate_16(int16_t * src_signal_arr, int16_t * dst_signal
 	float ctrl_factor_exp;
 	float k;
 
+#ifdef _DEBUG
 	PRINTF("$");
+#endif
 	for (uint32_t channel = 0; channel < CHANNEL_CNT; ++channel)
 	{
 		for (uint32_t i = channel; i < signal_arr_count; i += 2U)
 		{
 			x_rms_pow2[channel] = (one_minus_TAV * x_rms_pow2[channel]) + (TAV * src_signal_arr[i] * src_signal_arr[i]);
-//			x_rms = powf(x_rms_pow2[channel], 0.5f);
 		#ifdef PQ_USED
 			LOG2(&x_rms_pow2[channel], &x_rms_log);
 			x_rms_log *= 0.5f;
 		#else
-			x_rms_log = 0.5f * LOG2(x_rms_pow2);
+			x_rms_log = 0.5f * LOG2(x_rms_pow2[channel]);
 		#endif
 			if (i == 200)
 			{
@@ -254,7 +259,7 @@ void compressor_expander_ngate_16(int16_t * src_signal_arr, int16_t * dst_signal
 
 			ctrl_factor_smooth[channel] = (1.0f - k) * ctrl_factor_smooth[channel] + k * ctrl_factor;
 			ctrl_factor_old[channel] = ctrl_factor;
-
+#ifdef _DEBUG
 			if (channel == CHANNEL_LEFT)
 			{
 				PRINTF("%.3f, ", x_rms_log);
@@ -263,57 +268,8 @@ void compressor_expander_ngate_16(int16_t * src_signal_arr, int16_t * dst_signal
 					PRINTF("\r\n");
 				}
 			}
+#endif
 			dst_signal_arr[i] = (int16_t)(src_signal_arr[i] * ctrl_factor_smooth[channel]);
 		}
 	}
-}
-
-void fir_filter_16(int16_t * src_signal_arr, int16_t * dst_signal_arr, size_t signal_arr_count)
-{
-	static int16_t prev_samples[FIR_ORDER * 2] = {0};
-	uint32_t old_samples = FIR_ORDER;
-	float temp_sum = 0.0f;
-
-	/* left channel */
-	for (uint32_t i = 0U; i < signal_arr_count; i += 2U)
-	{
-		for (uint32_t j = 0; j < FIR_COEFF_COUNT; j++)
-		{
-			if (j < old_samples)
-			{
-				temp_sum += (float)prev_samples[i + (2 * j)] * fir_filter_coeff[j];
-			}
-			else
-			{
-				temp_sum += (float)src_signal_arr[i - (2 * (FIR_ORDER - j))] * fir_filter_coeff[j];
-			}
-		}
-		dst_signal_arr[i] = (int16_t)temp_sum;
-		temp_sum = 0.0f;
-		(old_samples > 0) ? old_samples-- : 0u;
-	}
-
-	old_samples = FIR_ORDER;
-
-	/* right channel */
-	for (uint32_t i = 1U; i < signal_arr_count; i += 2U)
-	{
-		for (int32_t j = 0; j < FIR_COEFF_COUNT; j++)
-		{
-			if (j < old_samples)
-			{
-				temp_sum += (float)prev_samples[i + (2 * j)] * fir_filter_coeff[j];
-			}
-			else
-			{
-				temp_sum += (float)src_signal_arr[i - (2 * (FIR_ORDER - j))] * fir_filter_coeff[j];
-			}
-		}
-		dst_signal_arr[i] = (int16_t)temp_sum;
-		temp_sum = 0.0f;
-		(old_samples > 0) ? old_samples-- : 0u;
-	}
-
-	/* save last samples for the next batch */
-	memcpy(&prev_samples[0], &src_signal_arr[signal_arr_count - (2 * FIR_ORDER)], (2 * FIR_ORDER * sizeof(src_signal_arr[0])));
 }

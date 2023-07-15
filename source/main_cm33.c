@@ -29,6 +29,7 @@
 #include "fsl_mu.h"
 
 #include "drc_algorithms_cm33.h"
+#include "drc_algorithms_cm33_conf.h"
 #include "algorithm_testbench.h"
 
 #include <stdbool.h>
@@ -53,7 +54,7 @@
 #define DEMO_CODEC_I2C_BASEADDR         I2C2
 //#define DEMO_CODEC_I2C_INSTANCE         2U
 #define DEMO_CODEC_VOLUME               100U
-#define BUFFER_SIZE						200
+#define BUFFER_SIZE						160
 #define DMA_DESCRIPTOR_NUM      		2U
 #define I2S_TRANSFER_NUM      			2U
 
@@ -62,10 +63,8 @@
 #define CTIMER_CLK_FREQ 				CLOCK_GetCtimerClkFreq(2)
 #define MS_TO_CTIMER_CLK_TICKS(ms)		(uint32_t)(CTIMER_CLK_FREQ * ms / 1000)
 
-#define DEMO_POWERQUAD 					POWERQUAD
-
-#define TEST_ARR_SIZE		5000
-#define ITER_COUNT			TEST_ARR_SIZE
+#define TEST_ARR_SIZE		320
+#define ITER_COUNT			100
 
 #define APP_MU            	MUA
 #define APP_MU_IRQHandler 	MU_A_IRQHandler
@@ -138,9 +137,11 @@ static ctimer_match_config_t matchConfig0;
 ctimer_config_t ctimer_config;
 ctimer_callback_t ctimer_callback = ctimer_match0_callback;
 
-static float test_arr [TEST_ARR_SIZE] = {0.0f};
+static float test_arr[TEST_ARR_SIZE] = {0.0f};
 static volatile int16_t src_test_arr_16[TEST_ARR_SIZE] = {0};
 static volatile int16_t dst_test_arr_16[TEST_ARR_SIZE] = {0};
+static volatile float32_t src_test_arr_f32[TEST_ARR_SIZE] = {0};
+static volatile float32_t dst_test_arr_f32[TEST_ARR_SIZE] = {0};
 
 /*******************************************************************************
  * Code
@@ -416,14 +417,16 @@ void APP_MU_IRQHandler(void)
 int main(void)
 {
 
-	check_coeff_validity();
+	check_coefficients();
 
+#ifdef PQ_USED
     /* Power up PQ RAM. */
     SYSCTL0->PDRUNCFG1_CLR = SYSCTL0_PDRUNCFG1_PQ_SRAM_APD_MASK | SYSCTL0_PDRUNCFG1_PQ_SRAM_PPD_MASK;
 
     /* Apply power setting. */
     POWER_ApplyPD();
-    PQ_Init(DEMO_POWERQUAD);
+    PQ_Init(POWERQUAD);
+#endif
 
     CLOCK_AttachClk(kSFRO_to_CTIMER2);
 
@@ -452,29 +455,25 @@ int main(void)
     calculate_coefficients();
 
     /*test algorithms and measure execution time */
-	float freq[] 	= {9000.0f, 7000.0f, 1500.0f};
-	float amp[] 	= {0.1f, 0.2f, 2.0f};
-//    PRINTF("\r\nlimiter_16:\r\n");
-//    measure_algorithm_time_16(limiter_16, (int16_t *)src_buffer_1, (int16_t *)dst_buffer_1, (BUFFER_SIZE / 2), ITER_COUNT);
-    test_algorithm(limiter_16, (int16_t *)src_test_arr_16, (int16_t *)dst_test_arr_16, TEST_ARR_SIZE, DEMO_AUDIO_SAMPLE_RATE,
-    		freq, amp, (sizeof(freq) / sizeof(freq[0])));
+    PRINTF("\r\nlimiter_16:\r\n");
+    measure_algorithm_time_16(limiter_16, (int16_t *)src_test_arr_16, (int16_t *)dst_test_arr_16, sizeof(src_test_arr_16), ITER_COUNT);
+//    test_drc_algorithm(limiter_16, (int16_t *)src_test_arr_16, (int16_t *)dst_test_arr_16, TEST_ARR_SIZE, DEMO_AUDIO_SAMPLE_RATE);
 //    PRINTF("\r\ncompressor_expander_ngate_16:\r\n");
-//    measure_algorithm_time_16(compressor_expander_ngate_16, (int16_t *)src_buffer_1, (int16_t *)dst_buffer_1, (BUFFER_SIZE / 2), ITER_COUNT);
+//    measure_algorithm_time_16(compressor_expander_ngate_16, (int16_t *)src_test_arr_16, (int16_t *)dst_test_arr_16, sizeof(src_test_arr_16), ITER_COUNT);
 //    PRINTF("\r\nfir_filter_16:\r\n");
-//    measure_algorithm_time_16(fir_filter_16, (int16_t *)src_buffer_1, (int16_t *)dst_buffer_1, (BUFFER_SIZE / 2), ITER_COUNT);
+//    measure_algorithm_time_16(fir_filter_16, (int16_t *)src_buffer_1, (int16_t *)dst_buffer_1, BUFFER_SIZE, ITER_COUNT);
 
 //    start_digital_loopback();
 
-//	for (int var = 0; var < 5; ++var)
-//	{
-//		test_pq_math(TEST_ARR_SIZE);
-//		PRINTF("\r\n");
-//	}
+//	test_cmsis_dsp((float32_t *)src_test_arr_f32, (float32_t *)dst_test_arr_f32, TEST_ARR_SIZE, DEMO_AUDIO_SAMPLE_RATE, ITER_COUNT);
+	PRINTF("\r\n");
 
-//    init_hifi4_operation();
+    init_hifi4_operation();
 
     /* check if algorithms work correctly */
-PRINTF("\r\nCPU frequency: %d Hz\r\n", SystemCoreClock);
+	PRINTF("\r\nCPU frequency: %d Hz\r\n", SystemCoreClock);
+	PRINTF("\r\nDSP frequency: %u Hz\r\n", CLOCK_GetDspMainClkFreq());
+
     while (1)
     {
     	__NOP();
