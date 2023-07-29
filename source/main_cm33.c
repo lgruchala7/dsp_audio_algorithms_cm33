@@ -27,6 +27,7 @@
 #include "fsl_powerquad.h"
 #include "fsl_power.h"
 #include "fsl_mu.h"
+#include "fsl_sema42.h"
 
 #include "drc_algorithms_cm33.h"
 #include "drc_algorithms_cm33_conf.h"
@@ -41,7 +42,7 @@
  * Definitions
  ******************************************************************************/
 #define DEMO_I2S_MASTER_CLOCK_FREQUENCY CLOCK_GetMclkClkFreq()
-#define DEMO_AUDIO_SAMPLE_RATE          (48000U)
+#define AUDIO_SAMPLE_RATE          (48000U)
 #define DEMO_AUDIO_PROTOCOL             kCODEC_BusI2S
 #define DEMO_I2S_TX                     (I2S3)
 #define DEMO_I2S_RX                     (I2S1)
@@ -54,7 +55,7 @@
 #define DEMO_CODEC_I2C_BASEADDR         I2C2
 //#define DEMO_CODEC_I2C_INSTANCE         2U
 #define DEMO_CODEC_VOLUME               100U
-#define BUFFER_SIZE						160
+#define BUFFER_SIZE						320
 #define DMA_DESCRIPTOR_NUM      		2U
 #define I2S_TRANSFER_NUM      			2U
 
@@ -67,13 +68,18 @@
 #define ITER_COUNT			100
 
 #define APP_MU            	MUA
-#define APP_MU_IRQHandler 	MU_A_IRQHandler
+#define APP_MU_IRQHandler_0 	MU_A_IRQHandler
+//#define APP_MU_IRQHandler_1 	MU_A_IRQHandler
+#define APP_SEMA42          SEMA42
+#define SEMA42_GATE 		0U
 /* Flag indicates Core Boot Up*/
 #define BOOT_FLAG 			0x01U
+#define SEMA42_LOCK_FLAG 	0x02U
+#define SEMA42_DSP_LOCK_FLAG 0x03U
 /* Channel transmit and receive register */
 #define CHN_MU_REG_NUM 		0U
 /* How many message is used to test message sending */
-#define MSG_LENGTH 			1U
+#define MSG_LENGTH 			2U
 
 /*******************************************************************************
  * Type definitions
@@ -84,6 +90,12 @@ typedef struct {
     unsigned long exec_time_sum;
 } hifi4_ctrl_t;
 
+enum {
+	SRC_BUFFER_RCV,
+	DST_BUFFER_RCV,
+	STAGES_MAX,
+};
+
 /*******************************************************************************
  * Prototypes
  ******************************************************************************/
@@ -91,6 +103,7 @@ static void TxCallback(I2S_Type *base, i2s_dma_handle_t *handle, status_t comple
 static void RxCallback(I2S_Type *base, i2s_dma_handle_t *handle, status_t completionStatus, void *userData);
 
 void ctimer_match0_callback(uint32_t flags);
+static void fill_msg_send(void);
 
 /*******************************************************************************
  * Variables
@@ -101,7 +114,7 @@ cs42448_config_t cs42448Config = {
     .reset        = NULL,
     .master       = false,
     .i2cConfig    = {.codecI2CInstance = BOARD_CODEC_I2C_INSTANCE},
-    .format       = {.sampleRate = DEMO_AUDIO_SAMPLE_RATE, .bitWidth = 16U},
+    .format       = {.sampleRate = AUDIO_SAMPLE_RATE, .bitWidth = 16U},
     .bus          = kCS42448_BusI2S,
     .slaveAddress = CS42448_I2C_ADDR,
 };
@@ -109,10 +122,10 @@ cs42448_config_t cs42448Config = {
 codec_config_t boardCodecConfig = {.codecDevType = kCODEC_CS42448, .codecDevConfig = &cs42448Config};
 
 hifi4_ctrl_t hifi4_ctrl;
-static uint32_t msgSend[MSG_LENGTH];
-static uint32_t msgRecv[MSG_LENGTH];
-volatile uint32_t curSend = 0;
-volatile uint32_t curRecv = 0;
+static uint32_t msg_send[MSG_LENGTH];
+static uint32_t msg_recv[MSG_LENGTH];
+volatile uint32_t cur_send = 0;
+volatile uint32_t cur_recv = 0;
 
 DMA_ALLOCATE_LINK_DESCRIPTORS(txDmaDescriptors, DMA_DESCRIPTOR_NUM);
 DMA_ALLOCATE_LINK_DESCRIPTORS(rxDmaDescriptors, DMA_DESCRIPTOR_NUM);
@@ -138,14 +151,28 @@ ctimer_config_t ctimer_config;
 ctimer_callback_t ctimer_callback = ctimer_match0_callback;
 
 static float test_arr[TEST_ARR_SIZE] = {0.0f};
-static volatile int16_t src_test_arr_16[TEST_ARR_SIZE] = {0};
-static volatile int16_t dst_test_arr_16[TEST_ARR_SIZE] = {0};
-static volatile float32_t src_test_arr_f32[TEST_ARR_SIZE] = {0};
-static volatile float32_t dst_test_arr_f32[TEST_ARR_SIZE] = {0};
+volatile int16_t src_test_arr_16[TEST_ARR_SIZE] = {0};
+volatile int16_t dst_test_arr_16[TEST_ARR_SIZE] = {0};
+volatile float32_t src_test_arr_f32[TEST_ARR_SIZE] = {0.0f};
+volatile float32_t dst_test_arr_f32[TEST_ARR_SIZE] = {0.0f};
 
 /*******************************************************************************
  * Code
  ******************************************************************************/
+static void clear_msg_recv(void)
+{
+    for (uint32_t i = 0U; i < MSG_LENGTH; i++)
+    {
+        msg_recv[i] = 0U;
+    }
+}
+
+static void fill_msg_send(void)
+{
+    msg_send[SRC_BUFFER_RCV] = (uint32_t)src_test_arr_f32;
+    msg_send[DST_BUFFER_RCV] = (uint32_t)dst_test_arr_f32;
+}
+
 static void init_hifi4_operation(void)
 {
     /* MUA init */
@@ -266,7 +293,7 @@ static void configure_codec(void)
 
     /* protocol: i2s
      * sampleRate: 48K
-     * bitwidth:16
+     * bitWidth: 16
      */
     if (CODEC_Init(&codecHandle, &boardCodecConfig) != kStatus_Success)
     {
@@ -378,17 +405,40 @@ void ctimer_match0_callback(uint32_t flags)
 	ctimer_ticks++;
 }
 
-void APP_MU_IRQHandler(void)
+void APP_MU_IRQHandler_0(void)
+{
+    uint32_t flag = MU_GetStatusFlags(APP_MU);
+
+    if ((flag & kMU_Tx0EmptyFlag) == kMU_Tx0EmptyFlag)
+    {
+        if (cur_send < STAGES_MAX)
+        {
+            MU_SendMsgNonBlocking(APP_MU, CHN_MU_REG_NUM, msg_send[cur_send++]);
+        }
+        else
+        {
+            MU_DisableInterrupts(APP_MU, kMU_Tx0EmptyInterruptEnable);
+        }
+    }
+
+    if ((flag & kMU_Rx0FullFlag) == kMU_Rx0FullFlag)
+    {
+    	MU_ReceiveMsgNonBlocking(APP_MU, CHN_MU_REG_NUM);
+        hifi4_ctrl.is_hifi4_processing = true;
+        MU_DisableInterrupts(APP_MU, kMU_Rx0FullInterruptEnable);
+    }
+}
+
+void APP_MU_IRQHandler_1(void)
 {
     uint32_t flag = 0;
 
     flag = MU_GetStatusFlags(APP_MU);
     if ((flag & kMU_Tx0EmptyFlag) == kMU_Tx0EmptyFlag)
     {
-        if (curSend < MSG_LENGTH)
+        if (cur_send < MSG_LENGTH)
         {
-            MU_SendMsgNonBlocking(APP_MU, CHN_MU_REG_NUM, msgSend[curSend++]);
-            hifi4_ctrl.start_time = MSDK_GetCpuCycleCount();
+            MU_SendMsgNonBlocking(APP_MU, CHN_MU_REG_NUM, msg_send[cur_send++]);
         }
         else
         {
@@ -397,18 +447,15 @@ void APP_MU_IRQHandler(void)
     }
     if ((flag & kMU_Rx0FullFlag) == kMU_Rx0FullFlag)
     {
-        if (curRecv < MSG_LENGTH)
+        if (cur_recv < MSG_LENGTH)
         {
-            msgRecv[curRecv++] = MU_ReceiveMsgNonBlocking(APP_MU, CHN_MU_REG_NUM);
-            hifi4_ctrl.exec_time_sum = MSDK_GetCpuCycleCount() - hifi4_ctrl.start_time;
-            hifi4_ctrl.is_hifi4_processing = false;
+            msg_recv[cur_recv++] = MU_ReceiveMsgNonBlocking(APP_MU, CHN_MU_REG_NUM);
         }
         else
         {
             MU_DisableInterrupts(APP_MU, kMU_Rx0FullInterruptEnable);
         }
     }
-    SDK_ISR_EXIT_BARRIER;
 }
 
 /*!
@@ -436,6 +483,8 @@ int main(void)
 
     /* Clear MUA reset */
     RESET_PeripheralReset(kMU_RST_SHIFT_RSTn);
+    /* Clear SEMA42 reset */
+    RESET_PeripheralReset(kSEMA_RST_SHIFT_RSTn);
     EnableIRQ(MU_A_IRQn);
 
     PRINTF("\nConfigure clocks\r\n");
@@ -455,9 +504,9 @@ int main(void)
     calculate_coefficients();
 
     /*test algorithms and measure execution time */
-    PRINTF("\r\nlimiter_16:\r\n");
-    measure_algorithm_time_16(limiter_16, (int16_t *)src_test_arr_16, (int16_t *)dst_test_arr_16, sizeof(src_test_arr_16), ITER_COUNT);
-//    test_drc_algorithm(limiter_16, (int16_t *)src_test_arr_16, (int16_t *)dst_test_arr_16, TEST_ARR_SIZE, DEMO_AUDIO_SAMPLE_RATE);
+//    PRINTF("\r\nlimiter_16:\r\n");
+//    measure_algorithm_time_16(limiter_16, (int16_t *)src_test_arr_16, (int16_t *)dst_test_arr_16, sizeof(src_test_arr_16), ITER_COUNT);
+//    test_drc_algorithm(limiter_16, (int16_t *)src_test_arr_16, (int16_t *)dst_test_arr_16, TEST_ARR_SIZE, AUDIO_SAMPLE_RATE);
 //    PRINTF("\r\ncompressor_expander_ngate_16:\r\n");
 //    measure_algorithm_time_16(compressor_expander_ngate_16, (int16_t *)src_test_arr_16, (int16_t *)dst_test_arr_16, sizeof(src_test_arr_16), ITER_COUNT);
 //    PRINTF("\r\nfir_filter_16:\r\n");
@@ -465,14 +514,53 @@ int main(void)
 
 //    start_digital_loopback();
 
-//	test_cmsis_dsp((float32_t *)src_test_arr_f32, (float32_t *)dst_test_arr_f32, TEST_ARR_SIZE, DEMO_AUDIO_SAMPLE_RATE, ITER_COUNT);
-	PRINTF("\r\n");
+//	test_cmsis_dsp((float32_t *)src_test_arr_f32, (float32_t *)dst_test_arr_f32, TEST_ARR_SIZE, AUDIO_SAMPLE_RATE, ITER_COUNT);
+//	PRINTF("\r\n");
+    fill_msg_send();
+    SEMA42_Init(APP_SEMA42);
+    SEMA42_ResetAllGates(APP_SEMA42);
 
-    init_hifi4_operation();
+    /* MUA init */
+    MU_Init(APP_MU);
+
+    /* Copy DSP image to RAM and start DSP core. */
+    BOARD_DSP_Init();
+    hifi4_ctrl.is_hifi4_processing = false;
+
+    MU_SetFlags(APP_MU, BOOT_FLAG);
+    while (BOOT_FLAG != MU_GetFlags(APP_MU))
+    {
+    }
+    MU_EnableInterrupts(APP_MU, (kMU_Tx0EmptyInterruptEnable | kMU_Rx0FullInterruptEnable));
+
+    while (!hifi4_ctrl.is_hifi4_processing)
+    {
+    }
+    SEMA42_Lock(APP_SEMA42, SEMA42_GATE, (uint8_t)1U);
+
+    MU_SetFlags(APP_MU, SEMA42_LOCK_FLAG);
+
+	float freq[] 	= {9000.0f, 7000.0f, 1500.0f};
+	float amp[] 	= {0.1f, 0.2f, 2.0f};
+	int freq_cnt = sizeof(freq) / sizeof(freq[0]);
+
+	generate_sine_wave_f32(&src_test_arr_f32[0], BUFFER_SIZE, AUDIO_SAMPLE_RATE, (float)INT16_MAX * 0.15, freq, amp, freq_cnt);
+	print_buffer_data_f32(src_test_arr_f32, BUFFER_SIZE);
+
+    SEMA42_Unlock(APP_SEMA42, SEMA42_GATE);
+
+    while (SEMA42_DSP_LOCK_FLAG != MU_GetFlags(APP_MU))
+    {
+    }
+
+    SEMA42_Lock(APP_SEMA42, SEMA42_GATE, (uint8_t)1U);
+    print_buffer_data_f32(dst_test_arr_f32, BUFFER_SIZE);
+
+//    init_hifi4_operation();
 
     /* check if algorithms work correctly */
-	PRINTF("\r\nCPU frequency: %d Hz\r\n", SystemCoreClock);
-	PRINTF("\r\nDSP frequency: %u Hz\r\n", CLOCK_GetDspMainClkFreq());
+//	PRINTF("\r\nCPU frequency: %d Hz\r\n", SystemCoreClock);
+//	PRINTF("\r\nDSP frequency: %u Hz\r\n", CLOCK_GetDspMainClkFreq());
 
     while (1)
     {

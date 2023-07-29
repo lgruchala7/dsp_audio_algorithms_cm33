@@ -29,9 +29,6 @@
 /*******************************************************************************
  * Prototypes
  ******************************************************************************/
-static void generate_sine_wave_f32(float32_t * input_vec, uint32_t vec_len, uint32_t fs, float max_amplitude, float * freq, float * amp, int freq_cnt);
-static void generate_sine_wave_16(int16_t * input_vec, uint32_t vec_len, uint32_t fs, float max_amplitude, float * freq, float * amp, int freq_cnt);
-
 /*******************************************************************************
  * Variables
  ******************************************************************************/
@@ -70,7 +67,7 @@ static void init_arr_with_rand_f32(float * arr, size_t arr_size)
     }
 }
 
-static void generate_sine_wave_16(int16_t * input_vec, uint32_t vec_len, uint32_t fs, float max_amplitude, float * freq, float * amp, int freq_cnt)
+void generate_sine_wave_16(int16_t * input_vec, uint32_t vec_len, uint32_t fs, float max_amplitude, float * freq, float * amp, int freq_cnt)
 {
 	float * rad 	= (float *)malloc(sizeof(float) * freq_cnt);
 	float * comp = (float *)malloc(sizeof(float) * freq_cnt);
@@ -114,7 +111,7 @@ static void generate_sine_wave_16(int16_t * input_vec, uint32_t vec_len, uint32_
 	free(comp);
 }
 
-static void generate_sine_wave_f32(float32_t * input_vec, uint32_t vec_len, uint32_t fs, float max_amplitude, float * freq, float * amp, int freq_cnt)
+void generate_sine_wave_f32(float32_t * input_vec, uint32_t vec_len, uint32_t fs, float max_amplitude, float * freq, float * amp, int freq_cnt)
 {
 	float * rad 	= (float *)malloc(sizeof(float) * freq_cnt);
 	float * comp = (float *)malloc(sizeof(float) * freq_cnt);
@@ -291,12 +288,12 @@ void print_buffer_data_f32(float32_t * buffer, size_t buffer_size)
 	PRINTF("\r\n\n");
 }
 
-void write_buffer_data_to_file_16(int16_t * data, size_t data_size)
+void write_buffer_data_to_file_16(int16_t * buffer, size_t buffer_size)
 {
 	PRINTF("$");
-	for (size_t i = 0; i < data_size; i++)
+	for (size_t i = 0; i < buffer_size; i++)
 	{
-		PRINTF("%d, ", data[i]);
+		PRINTF("%d, ", buffer[i]);
 		if (i%20 == 19)
 		{
 			PRINTF("\r\n");
