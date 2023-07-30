@@ -11,7 +11,6 @@
  * Includes
  ******************************************************************************/
 #include "dsp_support.h"
-#include "fsl_device_registers.h"
 #include "fsl_debug_console.h"
 #include "pin_mux.h"
 #include "board.h"
@@ -20,18 +19,16 @@
 #include "fsl_i2s.h"
 #include "fsl_i2s_dma.h"
 #include "fsl_codec_common.h"
-#include "music.h"
 #include "fsl_codec_adapter.h"
 #include "fsl_cs42448.h"
 #include "fsl_ctimer.h"
 #include "fsl_powerquad.h"
 #include "fsl_power.h"
-#include "fsl_mu.h"
-#include "fsl_sema42.h"
 
 #include "drc_algorithms_cm33.h"
 #include "drc_algorithms_cm33_conf.h"
 #include "algorithm_testbench.h"
+#include "main_cm33.h"
 
 #include <stdbool.h>
 #include <time.h>
@@ -41,21 +38,21 @@
 /*******************************************************************************
  * Definitions
  ******************************************************************************/
-#define DEMO_I2S_MASTER_CLOCK_FREQUENCY CLOCK_GetMclkClkFreq()
-#define AUDIO_SAMPLE_RATE          (48000U)
-#define DEMO_AUDIO_PROTOCOL             kCODEC_BusI2S
-#define DEMO_I2S_TX                     (I2S3)
-#define DEMO_I2S_RX                     (I2S1)
-#define DEMO_DMA                        (DMA0)
-#define DEMO_I2S_TX_CHANNEL             (7)
-#define DEMO_I2S_RX_CHANNEL             (2)
-#define DEMO_I2S_CLOCK_DIVIDER          (16)
-#define DEMO_I2S_TX_MODE                kI2S_MasterSlaveNormalMaster
-#define DEMO_I2S_RX_MODE                kI2S_MasterSlaveNormalMaster
-#define DEMO_CODEC_I2C_BASEADDR         I2C2
-//#define DEMO_CODEC_I2C_INSTANCE         2U
-#define DEMO_CODEC_VOLUME               100U
-#define BUFFER_SIZE						320
+#define I2S_MASTER_CLOCK_FREQUENCY CLOCK_GetMclkClkFreq()
+#define AUDIO_SAMPLE_RATE          		(48000U)
+#define AUDIO_PROTOCOL             kCODEC_BusI2S
+#define I2S_TX                     (I2S3)
+#define I2S_RX                     (I2S1)
+#define DMA_ENGINE                        (DMA0)
+#define I2S_TX_CHANNEL             (7)
+#define I2S_RX_CHANNEL             (2)
+#define I2S_CLOCK_DIVIDER          (16)
+#define I2S_TX_MODE                kI2S_MasterSlaveNormalMaster
+#define I2S_RX_MODE                kI2S_MasterSlaveNormalMaster
+#define CODEC_I2C_BASEADDR         I2C2
+//#define CODEC_I2C_INSTANCE         2U
+#define CODEC_VOLUME               100U
+#define BUFFER_SIZE						160U
 #define DMA_DESCRIPTOR_NUM      		2U
 #define I2S_TRANSFER_NUM      			2U
 
@@ -64,22 +61,11 @@
 #define CTIMER_CLK_FREQ 				CLOCK_GetCtimerClkFreq(2)
 #define MS_TO_CTIMER_CLK_TICKS(ms)		(uint32_t)(CTIMER_CLK_FREQ * ms / 1000)
 
-#define TEST_ARR_SIZE		320
+#define TEST_ARR_SIZE		800U
 #define ITER_COUNT			100
 
-#define APP_MU            	MUA
-#define APP_MU_IRQHandler_0 	MU_A_IRQHandler
-//#define APP_MU_IRQHandler_1 	MU_A_IRQHandler
-#define APP_SEMA42          SEMA42
-#define SEMA42_GATE 		0U
-/* Flag indicates Core Boot Up*/
 #define BOOT_FLAG 			0x01U
-#define SEMA42_LOCK_FLAG 	0x02U
-#define SEMA42_DSP_LOCK_FLAG 0x03U
-/* Channel transmit and receive register */
-#define CHN_MU_REG_NUM 		0U
-/* How many message is used to test message sending */
-#define MSG_LENGTH 			2U
+#define APP_MU_IRQHandler_0	MU_A_IRQHandler
 
 /*******************************************************************************
  * Type definitions
@@ -91,8 +77,9 @@ typedef struct {
 } hifi4_ctrl_t;
 
 enum {
-	SRC_BUFFER_RCV,
+	SRC_BUFFER_SEND,
 	DST_BUFFER_RCV,
+	RUN,
 	STAGES_MAX,
 };
 
@@ -103,7 +90,6 @@ static void TxCallback(I2S_Type *base, i2s_dma_handle_t *handle, status_t comple
 static void RxCallback(I2S_Type *base, i2s_dma_handle_t *handle, status_t completionStatus, void *userData);
 
 void ctimer_match0_callback(uint32_t flags);
-static void fill_msg_send(void);
 
 /*******************************************************************************
  * Variables
@@ -122,17 +108,13 @@ cs42448_config_t cs42448Config = {
 codec_config_t boardCodecConfig = {.codecDevType = kCODEC_CS42448, .codecDevConfig = &cs42448Config};
 
 hifi4_ctrl_t hifi4_ctrl;
-static uint32_t msg_send[MSG_LENGTH];
-static uint32_t msg_recv[MSG_LENGTH];
-volatile uint32_t cur_send = 0;
-volatile uint32_t cur_recv = 0;
 
 DMA_ALLOCATE_LINK_DESCRIPTORS(txDmaDescriptors, DMA_DESCRIPTOR_NUM);
 DMA_ALLOCATE_LINK_DESCRIPTORS(rxDmaDescriptors, DMA_DESCRIPTOR_NUM);
-__ALIGN_BEGIN static int16_t src_buffer_1[BUFFER_SIZE] __ALIGN_END; /* 100 samples => time about 2 ms */
-__ALIGN_BEGIN static int16_t src_buffer_2[BUFFER_SIZE] __ALIGN_END;
-__ALIGN_BEGIN static int16_t dst_buffer_1[BUFFER_SIZE] __ALIGN_END;
-__ALIGN_BEGIN static int16_t dst_buffer_2[BUFFER_SIZE] __ALIGN_END;
+static int16_t src_buffer_1[BUFFER_SIZE] __attribute__((aligned(4)));
+static int16_t src_buffer_2[BUFFER_SIZE] __attribute__((aligned(4)));
+static int16_t dst_buffer_1[BUFFER_SIZE] __attribute__((aligned(4)));
+static int16_t dst_buffer_2[BUFFER_SIZE] __attribute__((aligned(4)));
 static dma_handle_t dmaTxHandle;
 static dma_handle_t dmaRxHandle;
 static i2s_config_t txConfig;
@@ -153,48 +135,48 @@ ctimer_callback_t ctimer_callback = ctimer_match0_callback;
 static float test_arr[TEST_ARR_SIZE] = {0.0f};
 volatile int16_t src_test_arr_16[TEST_ARR_SIZE] = {0};
 volatile int16_t dst_test_arr_16[TEST_ARR_SIZE] = {0};
-volatile float32_t src_test_arr_f32[TEST_ARR_SIZE] = {0.0f};
+float32_t src_test_arr_f32[TEST_ARR_SIZE] = {0.0f};
+#ifdef Q31
+q31_t src_test_arr_q31[TEST_ARR_SIZE] = {(q31_t)0};
 volatile float32_t dst_test_arr_f32[TEST_ARR_SIZE] = {0.0f};
+volatile q31_t * dst_test_arr_q31 = NULL;
+#else
+volatile float32_t * dst_test_arr_f32 = NULL;
+#endif
+int volatile program_stage = SRC_BUFFER_SEND;
 
 /*******************************************************************************
  * Code
  ******************************************************************************/
-static void clear_msg_recv(void)
+static void test_hifi4(void)
 {
-    for (uint32_t i = 0U; i < MSG_LENGTH; i++)
-    {
-        msg_recv[i] = 0U;
-    }
-}
+    /* Semaphore init */
+    SEMA42_Init(APP_SEMA42);
+    SEMA42_ResetAllGates(APP_SEMA42);
 
-static void fill_msg_send(void)
-{
-    msg_send[SRC_BUFFER_RCV] = (uint32_t)src_test_arr_f32;
-    msg_send[DST_BUFFER_RCV] = (uint32_t)dst_test_arr_f32;
-}
-
-static void init_hifi4_operation(void)
-{
     /* MUA init */
     MU_Init(APP_MU);
 
     /* Copy DSP image to RAM and start DSP core. */
     BOARD_DSP_Init();
+    hifi4_ctrl.is_hifi4_processing = false;
 
-    /* Wait DSP core is Boot Up */
+    MU_SetFlags(APP_MU, BOOT_FLAG);
     while (BOOT_FLAG != MU_GetFlags(APP_MU))
     {
     }
-
-    /* Enable transmit and receive interrupt */
     MU_EnableInterrupts(APP_MU, (kMU_Tx0EmptyInterruptEnable | kMU_Rx0FullInterruptEnable));
 
-    hifi4_ctrl.is_hifi4_processing = true;
-    while (hifi4_ctrl.is_hifi4_processing)
+    while (!hifi4_ctrl.is_hifi4_processing)
     {
     }
 
-    PRINTF("\r\n[HiFi4] Average time: %.3f ms\r\n", CYCLES_TO_MS(hifi4_ctrl.exec_time_sum) / (float)ITER_COUNT);
+#ifndef Q31
+    test_hifi4_fir_f32(src_test_arr_f32, (float32_t *)dst_test_arr_f32, TEST_ARR_SIZE, AUDIO_SAMPLE_RATE);
+#else
+    test_hifi4_fir_q31(src_test_arr_f32, src_test_arr_q31, (float32_t *)dst_test_arr_f32, (q31_t *)dst_test_arr_q31,
+    		TEST_ARR_SIZE, AUDIO_SAMPLE_RATE);
+#endif
 }
 
 static void setup_ctimer(ctimer_config_t * config, CTIMER_Type * base,
@@ -233,19 +215,19 @@ static void start_digital_loopback(void)
     txTransfer[1].data     = (uint8_t *)&dst_buffer_2[0];
     txTransfer[1].dataSize = sizeof(dst_buffer_2);
 
-    I2S_RxTransferCreateHandleDMA(DEMO_I2S_RX, &rxHandle, &dmaRxHandle, RxCallback, (void *)&rxTransfer[0]);
-    I2S_TxTransferCreateHandleDMA(DEMO_I2S_TX, &txHandle, &dmaTxHandle, TxCallback, (void *)&txTransfer[0]);
+    I2S_RxTransferCreateHandleDMA(I2S_RX, &rxHandle, &dmaRxHandle, RxCallback, (void *)&rxTransfer[0]);
+    I2S_TxTransferCreateHandleDMA(I2S_TX, &txHandle, &dmaTxHandle, TxCallback, (void *)&txTransfer[0]);
 
     I2S_TransferInstallLoopDMADescriptorMemory(&rxHandle, rxDmaDescriptors, DMA_DESCRIPTOR_NUM);
     I2S_TransferInstallLoopDMADescriptorMemory(&txHandle, txDmaDescriptors, DMA_DESCRIPTOR_NUM);
 
 
-    if (I2S_TransferSendLoopDMA(DEMO_I2S_TX, &txHandle, &txTransfer[0], 2U) != kStatus_Success)
+    if (I2S_TransferSendLoopDMA(I2S_TX, &txHandle, &txTransfer[0], 2U) != kStatus_Success)
     {
         assert(false);
     }
 
-    if (I2S_TransferReceiveLoopDMA(DEMO_I2S_RX, &rxHandle, &rxTransfer[0], 2U) != kStatus_Success)
+    if (I2S_TransferReceiveLoopDMA(I2S_RX, &rxHandle, &rxTransfer[0], 2U) != kStatus_Success)
     {
         assert(false);
     }
@@ -253,37 +235,14 @@ static void start_digital_loopback(void)
 
 static void TxCallback(I2S_Type *base, i2s_dma_handle_t *handle, status_t completionStatus, void *userData)
 {
-	__NOP();
+	I2S_TransferAbortDMA(I2S_TX, &txHandle);
 }
 
 static void RxCallback(I2S_Type *base, i2s_dma_handle_t *handle, status_t completionStatus, void *userData)
 {
-	static unsigned long last_time =  0UL;
-	static int counter = 0;
-	static bool isIntA = true;
-	static unsigned long ticks_sum = 0UL;
 
-	if (last_time == 0UL)
-	{
-		last_time = MSDK_GetCpuCycleCount();
-	}
 
-	if (isIntA)
-	{
-		isIntA = false;
-		counter++;
-	}
-	else
-	{
-		isIntA = true;
-	}
-
-    i2s_transfer_t *transfer = (i2s_transfer_t *)userData;
-//    compressor_expander_ngate_16((int16_t *)transfer->data, transfer->dataSize);
-    if (counter == 1000 && !isIntA)
-    {
-    	PRINTF("Time between interrupts for transfer 1: %.3f ms\r\n", CYCLES_TO_MS(MSDK_GetCpuCycleCount() - last_time)/1000.0);
-    }
+	I2S_TransferAbortDMA(I2S_RX, &rxHandle);
 }
 
 static void configure_codec(void)
@@ -304,7 +263,7 @@ static void configure_codec(void)
      * Adjust it to your needs, 0-100, 0 for mute, 100 for maximum volume.
      */
     if (CODEC_SetVolume(&codecHandle, kCODEC_PlayChannelHeadphoneLeft | kCODEC_PlayChannelHeadphoneRight,
-                        DEMO_CODEC_VOLUME) != kStatus_Success)
+                        CODEC_VOLUME) != kStatus_Success)
     {
         assert(false);
     }
@@ -330,8 +289,8 @@ static void configure_i2s(void)
      * pack48 = false;
      */
     I2S_TxGetDefaultConfig(&txConfig);
-    txConfig.divider     = DEMO_I2S_CLOCK_DIVIDER;
-    txConfig.masterSlave = DEMO_I2S_TX_MODE;
+    txConfig.divider     = I2S_CLOCK_DIVIDER;
+    txConfig.masterSlave = I2S_TX_MODE;
 
     /*
      * masterSlave = kI2S_MasterSlaveNormalSlave;
@@ -351,23 +310,23 @@ static void configure_i2s(void)
      * pack48 = true;
      */
     I2S_RxGetDefaultConfig(&rxConfig);
-    rxConfig.divider     = DEMO_I2S_CLOCK_DIVIDER;
-    rxConfig.masterSlave = DEMO_I2S_RX_MODE;
+    rxConfig.divider     = I2S_CLOCK_DIVIDER;
+    rxConfig.masterSlave = I2S_RX_MODE;
 
-    I2S_TxInit(DEMO_I2S_TX, &txConfig);
-    I2S_RxInit(DEMO_I2S_RX, &rxConfig);
+    I2S_TxInit(I2S_TX, &txConfig);
+    I2S_RxInit(I2S_RX, &rxConfig);
 }
 
 static void configure_dma(void)
 {
-	DMA_Init(DEMO_DMA);
+	DMA_Init(DMA_ENGINE);
 
-	DMA_EnableChannel(DEMO_DMA, DEMO_I2S_TX_CHANNEL);
-	DMA_EnableChannel(DEMO_DMA, DEMO_I2S_RX_CHANNEL);
-	DMA_SetChannelPriority(DEMO_DMA, DEMO_I2S_TX_CHANNEL, kDMA_ChannelPriority3);
-	DMA_SetChannelPriority(DEMO_DMA, DEMO_I2S_RX_CHANNEL, kDMA_ChannelPriority2);
-	DMA_CreateHandle(&dmaTxHandle, DEMO_DMA, DEMO_I2S_TX_CHANNEL);
-	DMA_CreateHandle(&dmaRxHandle, DEMO_DMA, DEMO_I2S_RX_CHANNEL);
+	DMA_EnableChannel(DMA_ENGINE, I2S_TX_CHANNEL);
+	DMA_EnableChannel(DMA_ENGINE, I2S_RX_CHANNEL);
+	DMA_SetChannelPriority(DMA_ENGINE, I2S_TX_CHANNEL, kDMA_ChannelPriority3);
+	DMA_SetChannelPriority(DMA_ENGINE, I2S_RX_CHANNEL, kDMA_ChannelPriority2);
+	DMA_CreateHandle(&dmaTxHandle, DMA_ENGINE, I2S_TX_CHANNEL);
+	DMA_CreateHandle(&dmaRxHandle, DMA_ENGINE, I2S_RX_CHANNEL);
 }
 
 static void configure_ctimer(void)
@@ -409,52 +368,32 @@ void APP_MU_IRQHandler_0(void)
 {
     uint32_t flag = MU_GetStatusFlags(APP_MU);
 
-    if ((flag & kMU_Tx0EmptyFlag) == kMU_Tx0EmptyFlag)
+    if (((flag & kMU_Tx0EmptyFlag) == kMU_Tx0EmptyFlag) && (program_stage == SRC_BUFFER_SEND))
     {
-        if (cur_send < STAGES_MAX)
-        {
-            MU_SendMsgNonBlocking(APP_MU, CHN_MU_REG_NUM, msg_send[cur_send++]);
-        }
-        else
-        {
-            MU_DisableInterrupts(APP_MU, kMU_Tx0EmptyInterruptEnable);
-        }
+    	MU_ClearStatusFlags(APP_MU, kMU_Tx0EmptyFlag);
+		MU_DisableInterrupts(APP_MU, kMU_Tx0EmptyInterruptEnable);
+#ifndef Q31
+		MU_SendMsgNonBlocking(APP_MU, CHN_MU_REG_NUM, (uint32_t)src_test_arr_f32);
+#else
+		MU_SendMsgNonBlocking(APP_MU, CHN_MU_REG_NUM, (uint32_t)src_test_arr_q31);
+#endif
+		program_stage = DST_BUFFER_RCV;
     }
-
-    if ((flag & kMU_Rx0FullFlag) == kMU_Rx0FullFlag)
+    else if (((flag & kMU_Rx0FullFlag) == kMU_Rx0FullFlag) && (program_stage == DST_BUFFER_RCV))
     {
-    	MU_ReceiveMsgNonBlocking(APP_MU, CHN_MU_REG_NUM);
-        hifi4_ctrl.is_hifi4_processing = true;
+#ifndef Q31
+    	dst_test_arr_f32 = (float32_t *)MU_ReceiveMsgNonBlocking(APP_MU, CHN_MU_REG_NUM);
+#else
+    	dst_test_arr_q31 = (q31_t *)MU_ReceiveMsgNonBlocking(APP_MU, CHN_MU_REG_NUM);
+#endif
+    	hifi4_ctrl.is_hifi4_processing = true;
+    	MU_ClearStatusFlags(APP_MU, kMU_Rx0FullFlag);
         MU_DisableInterrupts(APP_MU, kMU_Rx0FullInterruptEnable);
+		program_stage = RUN;
     }
-}
-
-void APP_MU_IRQHandler_1(void)
-{
-    uint32_t flag = 0;
-
-    flag = MU_GetStatusFlags(APP_MU);
-    if ((flag & kMU_Tx0EmptyFlag) == kMU_Tx0EmptyFlag)
+    else
     {
-        if (cur_send < MSG_LENGTH)
-        {
-            MU_SendMsgNonBlocking(APP_MU, CHN_MU_REG_NUM, msg_send[cur_send++]);
-        }
-        else
-        {
-            MU_DisableInterrupts(APP_MU, kMU_Tx0EmptyInterruptEnable);
-        }
-    }
-    if ((flag & kMU_Rx0FullFlag) == kMU_Rx0FullFlag)
-    {
-        if (cur_recv < MSG_LENGTH)
-        {
-            msg_recv[cur_recv++] = MU_ReceiveMsgNonBlocking(APP_MU, CHN_MU_REG_NUM);
-        }
-        else
-        {
-            MU_DisableInterrupts(APP_MU, kMU_Rx0FullInterruptEnable);
-        }
+    	PRINTF("Unexpected interrupt\r\n");
     }
 }
 
@@ -463,7 +402,6 @@ void APP_MU_IRQHandler_1(void)
  */
 int main(void)
 {
-
 	check_coefficients();
 
 #ifdef PQ_USED
@@ -512,55 +450,16 @@ int main(void)
 //    PRINTF("\r\nfir_filter_16:\r\n");
 //    measure_algorithm_time_16(fir_filter_16, (int16_t *)src_buffer_1, (int16_t *)dst_buffer_1, BUFFER_SIZE, ITER_COUNT);
 
-//    start_digital_loopback();
-
 //	test_cmsis_dsp((float32_t *)src_test_arr_f32, (float32_t *)dst_test_arr_f32, TEST_ARR_SIZE, AUDIO_SAMPLE_RATE, ITER_COUNT);
 //	PRINTF("\r\n");
-    fill_msg_send();
-    SEMA42_Init(APP_SEMA42);
-    SEMA42_ResetAllGates(APP_SEMA42);
 
-    /* MUA init */
-    MU_Init(APP_MU);
-
-    /* Copy DSP image to RAM and start DSP core. */
-    BOARD_DSP_Init();
-    hifi4_ctrl.is_hifi4_processing = false;
-
-    MU_SetFlags(APP_MU, BOOT_FLAG);
-    while (BOOT_FLAG != MU_GetFlags(APP_MU))
-    {
-    }
-    MU_EnableInterrupts(APP_MU, (kMU_Tx0EmptyInterruptEnable | kMU_Rx0FullInterruptEnable));
-
-    while (!hifi4_ctrl.is_hifi4_processing)
-    {
-    }
-    SEMA42_Lock(APP_SEMA42, SEMA42_GATE, (uint8_t)1U);
-
-    MU_SetFlags(APP_MU, SEMA42_LOCK_FLAG);
-
-	float freq[] 	= {9000.0f, 7000.0f, 1500.0f};
-	float amp[] 	= {0.1f, 0.2f, 2.0f};
-	int freq_cnt = sizeof(freq) / sizeof(freq[0]);
-
-	generate_sine_wave_f32(&src_test_arr_f32[0], BUFFER_SIZE, AUDIO_SAMPLE_RATE, (float)INT16_MAX * 0.15, freq, amp, freq_cnt);
-	print_buffer_data_f32(src_test_arr_f32, BUFFER_SIZE);
-
-    SEMA42_Unlock(APP_SEMA42, SEMA42_GATE);
-
-    while (SEMA42_DSP_LOCK_FLAG != MU_GetFlags(APP_MU))
-    {
-    }
-
-    SEMA42_Lock(APP_SEMA42, SEMA42_GATE, (uint8_t)1U);
-    print_buffer_data_f32(dst_test_arr_f32, BUFFER_SIZE);
-
-//    init_hifi4_operation();
+    test_hifi4();
 
     /* check if algorithms work correctly */
 //	PRINTF("\r\nCPU frequency: %d Hz\r\n", SystemCoreClock);
 //	PRINTF("\r\nDSP frequency: %u Hz\r\n", CLOCK_GetDspMainClkFreq());
+
+//    start_digital_loopback();
 
     while (1)
     {

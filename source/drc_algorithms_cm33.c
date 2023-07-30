@@ -39,11 +39,11 @@
 #include "fsl_debug_console.h"
 #include <math.h>
 
-#include "drc_algorithms_cm33.h"
-#include "drc_algorithms_cm33_conf.h"
-
 #include "fsl_powerquad.h"
 #include "fsl_power.h"
+
+#include "drc_algorithms_cm33.h"
+#include "drc_algorithms_cm33_conf.h"
 
 /*******************************************************************************
  * Definitions
