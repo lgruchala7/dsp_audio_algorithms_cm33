@@ -38,23 +38,23 @@
 /*******************************************************************************
  * Definitions
  ******************************************************************************/
-#define I2S_MASTER_CLOCK_FREQUENCY CLOCK_GetMclkClkFreq()
-#define AUDIO_SAMPLE_RATE          		(48000U)
-#define AUDIO_PROTOCOL             kCODEC_BusI2S
-#define I2S_TX                     (I2S3)
-#define I2S_RX                     (I2S1)
-#define DMA_ENGINE                        (DMA0)
-#define I2S_TX_CHANNEL             (7)
-#define I2S_RX_CHANNEL             (2)
-#define I2S_CLOCK_DIVIDER          (16)
-#define I2S_TX_MODE                kI2S_MasterSlaveNormalMaster
-#define I2S_RX_MODE                kI2S_MasterSlaveNormalMaster
-#define CODEC_I2C_BASEADDR         I2C2
+#define I2S_MASTER_CLOCK_FREQUENCY 	CLOCK_GetMclkClkFreq()
+#define AUDIO_SAMPLE_RATE          	(48000U)
+#define AUDIO_PROTOCOL             	kCODEC_BusI2S
+#define I2S_TX                     	(I2S3)
+#define I2S_RX                     	(I2S1)
+#define DMA_ENGINE                 	(DMA0)
+#define I2S_TX_CHANNEL             	(7)
+#define I2S_RX_CHANNEL             	(2)
+#define I2S_CLOCK_DIVIDER          	(16)
+#define I2S_TX_MODE                	kI2S_MasterSlaveNormalMaster
+#define I2S_RX_MODE                	kI2S_MasterSlaveNormalMaster
+#define CODEC_I2C_BASEADDR         	I2C2
 //#define CODEC_I2C_INSTANCE         2U
-#define CODEC_VOLUME               100U
-#define BUFFER_SIZE						160U
-#define DMA_DESCRIPTOR_NUM      		2U
-#define I2S_TRANSFER_NUM      			2U
+#define CODEC_VOLUME               	100U
+#define BUFFER_SIZE					160U
+#define DMA_DESCRIPTOR_NUM      	2U
+#define I2S_TRANSFER_NUM			2U
 
 #define CTIMER          				CTIMER2         /* Timer 2 */
 #define CTIMER_MAT0_OUT 				kCTIMER_Match_0 /* Match output 0 */
@@ -64,7 +64,7 @@
 #define TEST_ARR_SIZE		800U
 #define ITER_COUNT			100
 
-#define BOOT_FLAG 			0x01U
+#define BOOT_FLAG 				0x01U
 #define APP_MU_IRQHandler_0	MU_A_IRQHandler
 
 /*******************************************************************************
@@ -111,10 +111,18 @@ hifi4_ctrl_t hifi4_ctrl;
 
 DMA_ALLOCATE_LINK_DESCRIPTORS(txDmaDescriptors, DMA_DESCRIPTOR_NUM);
 DMA_ALLOCATE_LINK_DESCRIPTORS(rxDmaDescriptors, DMA_DESCRIPTOR_NUM);
-static int16_t src_buffer_1[BUFFER_SIZE] __attribute__((aligned(4)));
-static int16_t src_buffer_2[BUFFER_SIZE] __attribute__((aligned(4)));
-static int16_t dst_buffer_1[BUFFER_SIZE] __attribute__((aligned(4)));
-static int16_t dst_buffer_2[BUFFER_SIZE] __attribute__((aligned(4)));
+static int16_t src_buffer_16_1[BUFFER_SIZE] __attribute__((aligned(4)));
+static int16_t src_buffer_16_2[BUFFER_SIZE] __attribute__((aligned(4)));
+static int16_t dst_buffer_16_1[BUFFER_SIZE] __attribute__((aligned(4)));
+static int16_t dst_buffer_16_2[BUFFER_SIZE] __attribute__((aligned(4)));
+static float32_t src_buffer_f32_1[BUFFER_SIZE] __attribute__((aligned(4)));
+static float32_t src_buffer_f32_2[BUFFER_SIZE] __attribute__((aligned(4)));
+static float32_t * dst_buffer_f32_1 = NULL;
+static float32_t * dst_buffer_f32_2 = NULL;
+static float32_t src_buffer_q31_1[BUFFER_SIZE] __attribute__((aligned(4)));
+static float32_t src_buffer_q31_2[BUFFER_SIZE] __attribute__((aligned(4)));
+static float32_t * dst_buffer_q31_1 = NULL;
+static float32_t * dst_buffer_q31_2 = NULL;
 static dma_handle_t dmaTxHandle;
 static dma_handle_t dmaRxHandle;
 static i2s_config_t txConfig;
@@ -179,6 +187,33 @@ static void test_hifi4(void)
 #endif
 }
 
+static void init_hifi4(void)
+{
+    /* Semaphore init */
+    SEMA42_Init(APP_SEMA42);
+    SEMA42_ResetAllGates(APP_SEMA42);
+
+    /* MUA init */
+    MU_Init(APP_MU);
+
+    /* Copy DSP image to RAM and start DSP core. */
+    BOARD_DSP_Init();
+    hifi4_ctrl.is_hifi4_processing = false;
+
+    MU_SetFlags(APP_MU, BOOT_FLAG);
+    while (BOOT_FLAG != MU_GetFlags(APP_MU))
+    {
+    }
+    MU_EnableInterrupts(APP_MU, (kMU_Tx0EmptyInterruptEnable | kMU_Rx0FullInterruptEnable));
+
+    while (!hifi4_ctrl.is_hifi4_processing)
+    {
+    }
+
+	SEMA42_Lock(APP_SEMA42, SEMA42_GATE, PROC_NUM);
+	MU_SetFlags(APP_MU, SEMA42_LOCK_FLAG);
+}
+
 static void setup_ctimer(ctimer_config_t * config, CTIMER_Type * base,
 		ctimer_match_config_t * matchConfig, ctimer_match_t matchChannel)
 {
@@ -203,17 +238,17 @@ static void start_digital_loopback(void)
 
     PRINTF("Setup digital loopback\r\n");
 
-    rxTransfer[0].data     = (uint8_t *)&src_buffer_1[0];
-    rxTransfer[0].dataSize = sizeof(src_buffer_1);
+    rxTransfer[0].data     = (uint8_t *)&src_buffer_16_1[0];
+    rxTransfer[0].dataSize = sizeof(src_buffer_16_1);
 
-    rxTransfer[1].data     = (uint8_t *)&src_buffer_2[0];
-    rxTransfer[1].dataSize = sizeof(src_buffer_2);
+    rxTransfer[1].data     = (uint8_t *)&src_buffer_16_2[0];
+    rxTransfer[1].dataSize = sizeof(src_buffer_16_2);
 
-    txTransfer[0].data     = (uint8_t *)&dst_buffer_1[0];
-    txTransfer[0].dataSize = sizeof(dst_buffer_1);
+    txTransfer[0].data     = (uint8_t *)&dst_buffer_16_1[0];
+    txTransfer[0].dataSize = sizeof(dst_buffer_16_1);
 
-    txTransfer[1].data     = (uint8_t *)&dst_buffer_2[0];
-    txTransfer[1].dataSize = sizeof(dst_buffer_2);
+    txTransfer[1].data     = (uint8_t *)&dst_buffer_16_2[0];
+    txTransfer[1].dataSize = sizeof(dst_buffer_16_2);
 
     I2S_RxTransferCreateHandleDMA(I2S_RX, &rxHandle, &dmaRxHandle, RxCallback, (void *)&rxTransfer[0]);
     I2S_TxTransferCreateHandleDMA(I2S_TX, &txHandle, &dmaTxHandle, TxCallback, (void *)&txTransfer[0]);
@@ -240,9 +275,41 @@ static void TxCallback(I2S_Type *base, i2s_dma_handle_t *handle, status_t comple
 
 static void RxCallback(I2S_Type *base, i2s_dma_handle_t *handle, status_t completionStatus, void *userData)
 {
-
+	static bool is_first_call = true;
 
 	I2S_TransferAbortDMA(I2S_RX, &rxHandle);
+
+	i2s_transfer_t *transfer = (i2s_transfer_t *)userData;
+	assert(transfer->dataSize == (BUFFER_SIZE * (sizeof(src_buffer_16_1[0]) / sizeof(transfer->data[0]))));
+	assert((void *)&transfer->data[0] == (void *)&src_buffer_16_1[0]);
+
+	for (int i = 0; i < BUFFER_SIZE; ++i)
+	{
+		src_buffer_f32_1[i] = (float32_t)src_buffer_16_1[i];
+	}
+
+	PRINTF("\r\nsrc_buffer_16_1:\r\n");
+	print_buffer_data_16(src_buffer_16_1, BUFFER_SIZE);
+	PRINTF("\r\nsrc_buffer_f32_1:\r\n");
+	print_buffer_data_f32((float32_t *)src_buffer_f32_1, BUFFER_SIZE);
+
+	MU_SetFlags(APP_MU, SEMA42_UNLOCK_FLAG);
+	SEMA42_Unlock(APP_SEMA42, SEMA42_GATE);
+	while (SEMA42_DSP_LOCK_FLAG != MU_GetFlags(APP_MU))
+	{
+	}
+	SEMA42_Lock(APP_SEMA42, SEMA42_GATE, PROC_NUM);
+
+	for (int i = 0; i < BUFFER_SIZE; ++i)
+	{
+		dst_buffer_16_1[i] = (int16_t)dst_buffer_f32_1[i];
+	}
+
+	PRINTF("\r\ndst_buffer_16_1:\r\n");
+	print_buffer_data_16(dst_buffer_16_1, BUFFER_SIZE);
+	PRINTF("\r\ndst_buffer_f32_1:\r\n");
+	print_buffer_data_f32((float32_t *)dst_buffer_f32_1, BUFFER_SIZE);
+
 }
 
 static void configure_codec(void)
@@ -364,7 +431,7 @@ void ctimer_match0_callback(uint32_t flags)
 	ctimer_ticks++;
 }
 
-void APP_MU_IRQHandler_0(void)
+void APP_MU_IRQHandler_test(void)
 {
     uint32_t flag = MU_GetStatusFlags(APP_MU);
 
@@ -385,6 +452,39 @@ void APP_MU_IRQHandler_0(void)
     	dst_test_arr_f32 = (float32_t *)MU_ReceiveMsgNonBlocking(APP_MU, CHN_MU_REG_NUM);
 #else
     	dst_test_arr_q31 = (q31_t *)MU_ReceiveMsgNonBlocking(APP_MU, CHN_MU_REG_NUM);
+#endif
+    	hifi4_ctrl.is_hifi4_processing = true;
+    	MU_ClearStatusFlags(APP_MU, kMU_Rx0FullFlag);
+        MU_DisableInterrupts(APP_MU, kMU_Rx0FullInterruptEnable);
+		program_stage = RUN;
+    }
+    else
+    {
+    	PRINTF("Unexpected interrupt\r\n");
+    }
+}
+
+void APP_MU_IRQHandler_0(void)
+{
+    uint32_t flag = MU_GetStatusFlags(APP_MU);
+
+    if (((flag & kMU_Tx0EmptyFlag) == kMU_Tx0EmptyFlag) && (program_stage == SRC_BUFFER_SEND))
+    {
+    	MU_ClearStatusFlags(APP_MU, kMU_Tx0EmptyFlag);
+		MU_DisableInterrupts(APP_MU, kMU_Tx0EmptyInterruptEnable);
+#ifndef Q31
+		MU_SendMsgNonBlocking(APP_MU, CHN_MU_REG_NUM, (uint32_t)src_buffer_f32_1);
+#else
+		MU_SendMsgNonBlocking(APP_MU, CHN_MU_REG_NUM, (uint32_t)src_buffer_q31_1);
+#endif
+		program_stage = DST_BUFFER_RCV;
+    }
+    else if (((flag & kMU_Rx0FullFlag) == kMU_Rx0FullFlag) && (program_stage == DST_BUFFER_RCV))
+    {
+#ifndef Q31
+    	dst_buffer_f32_1 = (float32_t *)MU_ReceiveMsgNonBlocking(APP_MU, CHN_MU_REG_NUM);
+#else
+    	dst_buffer_q31_1 = (q31_t *)MU_ReceiveMsgNonBlocking(APP_MU, CHN_MU_REG_NUM);
 #endif
     	hifi4_ctrl.is_hifi4_processing = true;
     	MU_ClearStatusFlags(APP_MU, kMU_Rx0FullFlag);
@@ -424,6 +524,9 @@ int main(void)
     /* Clear SEMA42 reset */
     RESET_PeripheralReset(kSEMA_RST_SHIFT_RSTn);
     EnableIRQ(MU_A_IRQn);
+    /* Clear DMA Controller 0 reset */
+    RESET_PeripheralReset(kDMAC0_RST_SHIFT_RSTn);
+
 
     PRINTF("\nConfigure clocks\r\n");
     configure_clocks();
@@ -448,18 +551,19 @@ int main(void)
 //    PRINTF("\r\ncompressor_expander_ngate_16:\r\n");
 //    measure_algorithm_time_16(compressor_expander_ngate_16, (int16_t *)src_test_arr_16, (int16_t *)dst_test_arr_16, sizeof(src_test_arr_16), ITER_COUNT);
 //    PRINTF("\r\nfir_filter_16:\r\n");
-//    measure_algorithm_time_16(fir_filter_16, (int16_t *)src_buffer_1, (int16_t *)dst_buffer_1, BUFFER_SIZE, ITER_COUNT);
+//    measure_algorithm_time_16(fir_filter_16, (int16_t *)src_buffer_16_1, (int16_t *)dst_buffer_16_1, BUFFER_SIZE, ITER_COUNT);
 
 //	test_cmsis_dsp((float32_t *)src_test_arr_f32, (float32_t *)dst_test_arr_f32, TEST_ARR_SIZE, AUDIO_SAMPLE_RATE, ITER_COUNT);
 //	PRINTF("\r\n");
 
-    test_hifi4();
+//    test_hifi4();
 
     /* check if algorithms work correctly */
 //	PRINTF("\r\nCPU frequency: %d Hz\r\n", SystemCoreClock);
 //	PRINTF("\r\nDSP frequency: %u Hz\r\n", CLOCK_GetDspMainClkFreq());
 
-//    start_digital_loopback();
+    init_hifi4();
+    start_digital_loopback();
 
     while (1)
     {
