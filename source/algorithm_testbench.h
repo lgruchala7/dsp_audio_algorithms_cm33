@@ -16,9 +16,6 @@
 /*******************************************************************************
  * Definitions
  ******************************************************************************/
-#define MATCH_VAL_MS					0.1
-#define CTIMER_TICKS_TO_MS(t)			((t) * (MATCH_VAL_MS))
-#define CTIMER_TICKS_TO_US(t)			((t) * (MATCH_VAL_MS) * 1000.0)
 #define CYCLES_TO_MS(c)					((c) * 1000.0 / (SystemCoreClock))
 #define CYCLES_TO_US(c)					((c) * 1000000.0 / (SystemCoreClock))
 
@@ -39,6 +36,5 @@ void test_hifi4_fir_f32(float32_t * src_buffer_f32, float32_t * dst_buffer_f32, 
 /*******************************************************************************
  * Exported variables
  ******************************************************************************/
-extern volatile unsigned long ctimer_ticks;
 
 #endif /* ALGORITHM_TESTBENCH_H_ */

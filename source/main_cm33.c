@@ -21,7 +21,6 @@
 #include "fsl_codec_common.h"
 #include "fsl_codec_adapter.h"
 #include "fsl_cs42448.h"
-#include "fsl_ctimer.h"
 #include "fsl_powerquad.h"
 #include "fsl_power.h"
 
@@ -56,11 +55,6 @@
 #define DMA_DESCRIPTOR_NUM      	2U
 #define I2S_TRANSFER_NUM			2U
 
-#define CTIMER          				CTIMER2         /* Timer 2 */
-#define CTIMER_MAT0_OUT 				kCTIMER_Match_0 /* Match output 0 */
-#define CTIMER_CLK_FREQ 				CLOCK_GetCtimerClkFreq(2)
-#define MS_TO_CTIMER_CLK_TICKS(ms)		(uint32_t)(CTIMER_CLK_FREQ * ms / 1000)
-
 #define TEST_ARR_SIZE		800U
 #define ITER_COUNT			100
 
@@ -77,8 +71,10 @@ typedef struct {
 } hifi4_ctrl_t;
 
 enum {
-	SRC_BUFFER_SEND,
-	DST_BUFFER_RCV,
+	SRC_BUFFER_1_SEND,
+	SRC_BUFFER_2_SEND,
+	DST_BUFFER_1_RCV,
+	DST_BUFFER_2_RCV,
 	RUN,
 	STAGES_MAX,
 };
@@ -88,8 +84,6 @@ enum {
  ******************************************************************************/
 static void TxCallback(I2S_Type *base, i2s_dma_handle_t *handle, status_t completionStatus, void *userData);
 static void RxCallback(I2S_Type *base, i2s_dma_handle_t *handle, status_t completionStatus, void *userData);
-
-void ctimer_match0_callback(uint32_t flags);
 
 /*******************************************************************************
  * Variables
@@ -109,8 +103,8 @@ codec_config_t boardCodecConfig = {.codecDevType = kCODEC_CS42448, .codecDevConf
 
 hifi4_ctrl_t hifi4_ctrl;
 
-DMA_ALLOCATE_LINK_DESCRIPTORS(txDmaDescriptors, DMA_DESCRIPTOR_NUM);
-DMA_ALLOCATE_LINK_DESCRIPTORS(rxDmaDescriptors, DMA_DESCRIPTOR_NUM);
+SDK_ALIGN(static dma_descriptor_t txDmaDescriptors[DMA_DESCRIPTOR_NUM], FSL_FEATURE_DMA_LINK_DESCRIPTOR_ALIGN_SIZE);
+SDK_ALIGN(static dma_descriptor_t rxDmaDescriptors[DMA_DESCRIPTOR_NUM], FSL_FEATURE_DMA_LINK_DESCRIPTOR_ALIGN_SIZE);
 static int16_t src_buffer_16_1[BUFFER_SIZE] __attribute__((aligned(4)));
 static int16_t src_buffer_16_2[BUFFER_SIZE] __attribute__((aligned(4)));
 static int16_t dst_buffer_16_1[BUFFER_SIZE] __attribute__((aligned(4)));
@@ -134,12 +128,6 @@ static i2s_transfer_t txTransfer[I2S_TRANSFER_NUM];
 static codec_handle_t codecHandle;
 extern codec_config_t boardCodecConfig;
 
-volatile unsigned long ctimer_ticks = 0UL;
-/* Match Configuration for Channel 0 */
-static ctimer_match_config_t matchConfig0;
-ctimer_config_t ctimer_config;
-ctimer_callback_t ctimer_callback = ctimer_match0_callback;
-
 static float test_arr[TEST_ARR_SIZE] = {0.0f};
 volatile int16_t src_test_arr_16[TEST_ARR_SIZE] = {0};
 volatile int16_t dst_test_arr_16[TEST_ARR_SIZE] = {0};
@@ -151,7 +139,7 @@ volatile q31_t * dst_test_arr_q31 = NULL;
 #else
 volatile float32_t * dst_test_arr_f32 = NULL;
 #endif
-int volatile program_stage = SRC_BUFFER_SEND;
+int volatile program_stage = SRC_BUFFER_1_SEND;
 
 /*******************************************************************************
  * Code
@@ -210,27 +198,12 @@ static void init_hifi4(void)
     {
     }
 
-	SEMA42_Lock(APP_SEMA42, SEMA42_GATE, PROC_NUM);
-	MU_SetFlags(APP_MU, SEMA42_LOCK_FLAG);
-}
-
-static void setup_ctimer(ctimer_config_t * config, CTIMER_Type * base,
-		ctimer_match_config_t * matchConfig, ctimer_match_t matchChannel)
-{
-//	CLOCK_AttachClk(kSFRO_to_CTIMER2);
-//	PRINTF("CTIMER2 Clock Frequency: %u\r\n", CTIMER_CLK_FREQ);
-//	PRINTF("CTIMER2 Match Value: %u\r\n", MS_TO_CTIMER_CLK_TICKS(MATCH_VAL_MS));
-    CTIMER_GetDefaultConfig(config);
-    CTIMER_Init(base, config);
-
-    CTIMER_RegisterCallBack(base, &ctimer_callback, kCTIMER_SingleCallback);
-    CTIMER_SetupMatch(base, matchChannel, matchConfig);
-    CTIMER_StartTimer(base);
+//	SEMA42_Lock(APP_SEMA42, SEMA42_GATE, PROC_NUM);
+//	MU_SetFlags(APP_MU, SEMA42_LOCK_FLAG);
 }
 
 static void start_digital_loopback(void)
 {
-    uint32_t *srcAddr = NULL, *destAddr = NULL, srcInc = 4UL, destInc = 4UL;
     bool intA = true;
     i2s_dma_handle_t * handle;
     dma_handle_t * dma_handle;
@@ -250,8 +223,8 @@ static void start_digital_loopback(void)
     txTransfer[1].data     = (uint8_t *)&dst_buffer_16_2[0];
     txTransfer[1].dataSize = sizeof(dst_buffer_16_2);
 
-    I2S_RxTransferCreateHandleDMA(I2S_RX, &rxHandle, &dmaRxHandle, RxCallback, (void *)&rxTransfer[0]);
-    I2S_TxTransferCreateHandleDMA(I2S_TX, &txHandle, &dmaTxHandle, TxCallback, (void *)&txTransfer[0]);
+    I2S_RxTransferCreateHandleDMA(I2S_RX, &rxHandle, &dmaRxHandle, RxCallback, (void *)&rxTransfer);
+    I2S_TxTransferCreateHandleDMA(I2S_TX, &txHandle, &dmaTxHandle, TxCallback, (void *)&txTransfer);
 
     I2S_TransferInstallLoopDMADescriptorMemory(&rxHandle, rxDmaDescriptors, DMA_DESCRIPTOR_NUM);
     I2S_TransferInstallLoopDMADescriptorMemory(&txHandle, txDmaDescriptors, DMA_DESCRIPTOR_NUM);
@@ -271,45 +244,167 @@ static void start_digital_loopback(void)
 static void TxCallback(I2S_Type *base, i2s_dma_handle_t *handle, status_t completionStatus, void *userData)
 {
 	I2S_TransferAbortDMA(I2S_TX, &txHandle);
+//	__NOP();
 }
 
 static void RxCallback(I2S_Type *base, i2s_dma_handle_t *handle, status_t completionStatus, void *userData)
 {
-	static bool is_first_call = true;
-
-	I2S_TransferAbortDMA(I2S_RX, &rxHandle);
-
 	i2s_transfer_t *transfer = (i2s_transfer_t *)userData;
-	assert(transfer->dataSize == (BUFFER_SIZE * (sizeof(src_buffer_16_1[0]) / sizeof(transfer->data[0]))));
-	assert((void *)&transfer->data[0] == (void *)&src_buffer_16_1[0]);
+	static int call_cnt = 0;
+	static bool is_intA = false;
 
-	for (int i = 0; i < BUFFER_SIZE; ++i)
+//	I2S_TransferAbortDMA(I2S_RX, &rxHandle);
+
+	if (call_cnt == 1000)
 	{
-		src_buffer_f32_1[i] = (float32_t)src_buffer_16_1[i];
+		SEMA42_Lock(APP_SEMA42, SEMA42_GATE, PROC_NUM);
+		MU_SetFlags(APP_MU, SEMA42_LOCK_FLAG);
+
+		assert(transfer->dataSize == (BUFFER_SIZE * (sizeof(src_buffer_16_1[0]) / sizeof(transfer->data[0]))));
+		assert((void *)&transfer->data[0] == (void *)&src_buffer_16_1[0]);
+
+		for (int i = 0; i < BUFFER_SIZE; ++i)
+		{
+			src_buffer_f32_1[i] = (float32_t)src_buffer_16_1[i];
+		}
+
+//		PRINTF("\r\nsrc_buffer_16_1:\r\n");
+//		print_buffer_data_16(src_buffer_16_1, BUFFER_SIZE);
+//		PRINTF("\r\nsrc_buffer_f32_1:\r\n");
+//		print_buffer_data_f32((float32_t *)src_buffer_f32_1, BUFFER_SIZE);
+
+		MU_SetFlags(APP_MU, SEMA42_UNLOCK_FLAG);
+		SEMA42_Unlock(APP_SEMA42, SEMA42_GATE);
+		while (SEMA42_DSP_LOCK_FLAG != MU_GetFlags(APP_MU))
+		{
+		}
+		SEMA42_Lock(APP_SEMA42, SEMA42_GATE, PROC_NUM);
+
+		for (int i = 0; i < BUFFER_SIZE; ++i)
+		{
+			dst_buffer_16_1[i] = (int16_t)dst_buffer_f32_1[i];
+		}
+
+//		PRINTF("\r\ndst_buffer_16_1:\r\n");
+//		print_buffer_data_16(dst_buffer_16_1, BUFFER_SIZE);
+//		PRINTF("\r\ndst_buffer_f32_1:\r\n");
+//		print_buffer_data_f32((float32_t *)dst_buffer_f32_1, BUFFER_SIZE);
+	}
+	else if (call_cnt == 1001)
+	{
+		I2S_TransferAbortDMA(I2S_RX, &rxHandle);
+
+		SEMA42_Lock(APP_SEMA42, SEMA42_GATE, PROC_NUM);
+		MU_SetFlags(APP_MU, SEMA42_LOCK_FLAG);
+
+		assert(transfer->dataSize == (BUFFER_SIZE * (sizeof(src_buffer_16_2[0]) / sizeof(transfer->data[0]))));
+		assert((void *)&transfer->data[0] == (void *)&src_buffer_16_1[0]);
+
+		for (int i = 0; i < BUFFER_SIZE; ++i)
+		{
+			src_buffer_f32_2[i] = (float32_t)src_buffer_16_2[i];
+		}
+
+		PRINTF("\r\nsrc_buffer_16_1:\r\n");
+		print_buffer_data_16(src_buffer_16_1, BUFFER_SIZE);
+		PRINTF("\r\nsrc_buffer_f32_1:\r\n");
+		print_buffer_data_f32((float32_t *)src_buffer_f32_1, BUFFER_SIZE);
+		PRINTF("\r\nsrc_buffer_16_2:\r\n");
+		print_buffer_data_16(src_buffer_16_2, BUFFER_SIZE);
+		PRINTF("\r\nsrc_buffer_f32_2:\r\n");
+		print_buffer_data_f32((float32_t *)src_buffer_f32_2, BUFFER_SIZE);
+
+		MU_SetFlags(APP_MU, SEMA42_UNLOCK_FLAG);
+		SEMA42_Unlock(APP_SEMA42, SEMA42_GATE);
+		while (SEMA42_DSP_LOCK_FLAG != MU_GetFlags(APP_MU))
+		{
+		}
+		SEMA42_Lock(APP_SEMA42, SEMA42_GATE, PROC_NUM);
+
+		for (int i = 0; i < BUFFER_SIZE; ++i)
+		{
+			dst_buffer_16_2[i] = (int16_t)dst_buffer_f32_2[i];
+		}
+
+		PRINTF("\r\ndst_buffer_16_1:\r\n");
+		print_buffer_data_16(dst_buffer_16_1, BUFFER_SIZE);
+		PRINTF("\r\ndst_buffer_f32_1:\r\n");
+		print_buffer_data_f32((float32_t *)dst_buffer_f32_1, BUFFER_SIZE);
+		PRINTF("\r\ndst_buffer_16_2:\r\n");
+		print_buffer_data_16(dst_buffer_16_2, BUFFER_SIZE);
+		PRINTF("\r\ndst_buffer_f32_2:\r\n");
+		print_buffer_data_f32((float32_t *)dst_buffer_f32_2, BUFFER_SIZE);
 	}
 
-	PRINTF("\r\nsrc_buffer_16_1:\r\n");
-	print_buffer_data_16(src_buffer_16_1, BUFFER_SIZE);
-	PRINTF("\r\nsrc_buffer_f32_1:\r\n");
-	print_buffer_data_f32((float32_t *)src_buffer_f32_1, BUFFER_SIZE);
+	call_cnt++;
+	is_intA = (is_intA == true ? false : true);
 
-	MU_SetFlags(APP_MU, SEMA42_UNLOCK_FLAG);
-	SEMA42_Unlock(APP_SEMA42, SEMA42_GATE);
-	while (SEMA42_DSP_LOCK_FLAG != MU_GetFlags(APP_MU))
-	{
-	}
-	SEMA42_Lock(APP_SEMA42, SEMA42_GATE, PROC_NUM);
-
-	for (int i = 0; i < BUFFER_SIZE; ++i)
-	{
-		dst_buffer_16_1[i] = (int16_t)dst_buffer_f32_1[i];
-	}
-
-	PRINTF("\r\ndst_buffer_16_1:\r\n");
-	print_buffer_data_16(dst_buffer_16_1, BUFFER_SIZE);
-	PRINTF("\r\ndst_buffer_f32_1:\r\n");
-	print_buffer_data_f32((float32_t *)dst_buffer_f32_1, BUFFER_SIZE);
-
+//	if (is_intA)
+//	{
+//		i2s_transfer_t *transfer = (i2s_transfer_t *)userData;
+//		assert(transfer->dataSize == (BUFFER_SIZE * (sizeof(src_buffer_16_1[0]) / sizeof(transfer->data[0]))));
+//		assert((void *)&transfer->data[0] == (void *)&src_buffer_16_1[0]);
+//
+//		for (int i = 0; i < BUFFER_SIZE; ++i)
+//		{
+//			src_buffer_f32_1[i] = (float32_t)src_buffer_16_1[i];
+//		}
+//
+////		PRINTF("\r\nsrc_buffer_16_1:\r\n");
+////		print_buffer_data_16(src_buffer_16_1, BUFFER_SIZE);
+////		PRINTF("\r\nsrc_buffer_f32_1:\r\n");
+////		print_buffer_data_f32((float32_t *)src_buffer_f32_1, BUFFER_SIZE);
+//
+//		MU_SetFlags(APP_MU, SEMA42_UNLOCK_FLAG);
+//		SEMA42_Unlock(APP_SEMA42, SEMA42_GATE);
+//		while (SEMA42_DSP_LOCK_FLAG != MU_GetFlags(APP_MU))
+//		{
+//		}
+//		SEMA42_Lock(APP_SEMA42, SEMA42_GATE, PROC_NUM);
+//
+//		for (int i = 0; i < BUFFER_SIZE; ++i)
+//		{
+//			dst_buffer_16_1[i] = (int16_t)dst_buffer_f32_1[i];
+//		}
+//
+////		PRINTF("\r\ndst_buffer_16_1:\r\n");
+////		print_buffer_data_16(dst_buffer_16_1, BUFFER_SIZE);
+////		PRINTF("\r\ndst_buffer_f32_1:\r\n");
+////		print_buffer_data_f32((float32_t *)dst_buffer_f32_1, BUFFER_SIZE);
+//	}
+//	else
+//	{
+//		i2s_transfer_t *transfer = (i2s_transfer_t *)userData;
+//		assert(transfer->dataSize == (BUFFER_SIZE * (sizeof(src_buffer_16_2[0]) / sizeof(transfer->data[0]))));
+//		assert((void *)&transfer->data[0] == (void *)&src_buffer_16_2[0]);
+//
+//		for (int i = 0; i < BUFFER_SIZE; ++i)
+//		{
+//			src_buffer_f32_2[i] = (float32_t)src_buffer_16_2[i];
+//		}
+//
+//		PRINTF("\r\nsrc_buffer_16_2:\r\n");
+//		print_buffer_data_16(src_buffer_16_2, BUFFER_SIZE);
+//		PRINTF("\r\nsrc_buffer_f32_2:\r\n");
+//		print_buffer_data_f32((float32_t *)src_buffer_f32_2, BUFFER_SIZE);
+//
+//		MU_SetFlags(APP_MU, SEMA42_UNLOCK_FLAG);
+//		SEMA42_Unlock(APP_SEMA42, SEMA42_GATE);
+//		while (SEMA42_DSP_LOCK_FLAG != MU_GetFlags(APP_MU))
+//		{
+//		}
+//		SEMA42_Lock(APP_SEMA42, SEMA42_GATE, PROC_NUM);
+//
+//		for (int i = 0; i < BUFFER_SIZE; ++i)
+//		{
+//			dst_buffer_16_2[i] = (int16_t)dst_buffer_f32_2[i];
+//		}
+//
+//		PRINTF("\r\ndst_buffer_16_2:\r\n");
+//		print_buffer_data_16(dst_buffer_16_2, BUFFER_SIZE);
+//		PRINTF("\r\ndst_buffer_f32_2:\r\n");
+//		print_buffer_data_f32((float32_t *)dst_buffer_f32_2, BUFFER_SIZE);
+//	}
 }
 
 static void configure_codec(void)
@@ -396,18 +491,6 @@ static void configure_dma(void)
 	DMA_CreateHandle(&dmaRxHandle, DMA_ENGINE, I2S_RX_CHANNEL);
 }
 
-static void configure_ctimer(void)
-{
-	matchConfig0.enableCounterReset = true;
-	matchConfig0.enableCounterStop  = false;
-	matchConfig0.matchValue         = MS_TO_CTIMER_CLK_TICKS(MATCH_VAL_MS);
-	matchConfig0.outControl         = kCTIMER_Output_Toggle;
-	matchConfig0.outPinInitState    = false;
-	matchConfig0.enableInterrupt    = true;
-
-//	setup_ctimer(&ctimer_config, CTIMER, &matchConfig0, CTIMER_MAT0_OUT);
-}
-
 static void configure_clocks(void)
 {
     CLOCK_EnableClock(kCLOCK_InputMux);
@@ -426,74 +509,110 @@ static void configure_clocks(void)
     SYSCTL1->MCLKPINDIR = SYSCTL1_MCLKPINDIR_MCLKPINDIR_MASK;
 }
 
-void ctimer_match0_callback(uint32_t flags)
-{
-	ctimer_ticks++;
-}
-
 void APP_MU_IRQHandler_test(void)
 {
-    uint32_t flag = MU_GetStatusFlags(APP_MU);
-
-    if (((flag & kMU_Tx0EmptyFlag) == kMU_Tx0EmptyFlag) && (program_stage == SRC_BUFFER_SEND))
-    {
-    	MU_ClearStatusFlags(APP_MU, kMU_Tx0EmptyFlag);
-		MU_DisableInterrupts(APP_MU, kMU_Tx0EmptyInterruptEnable);
-#ifndef Q31
-		MU_SendMsgNonBlocking(APP_MU, CHN_MU_REG_NUM, (uint32_t)src_test_arr_f32);
-#else
-		MU_SendMsgNonBlocking(APP_MU, CHN_MU_REG_NUM, (uint32_t)src_test_arr_q31);
-#endif
-		program_stage = DST_BUFFER_RCV;
-    }
-    else if (((flag & kMU_Rx0FullFlag) == kMU_Rx0FullFlag) && (program_stage == DST_BUFFER_RCV))
-    {
-#ifndef Q31
-    	dst_test_arr_f32 = (float32_t *)MU_ReceiveMsgNonBlocking(APP_MU, CHN_MU_REG_NUM);
-#else
-    	dst_test_arr_q31 = (q31_t *)MU_ReceiveMsgNonBlocking(APP_MU, CHN_MU_REG_NUM);
-#endif
-    	hifi4_ctrl.is_hifi4_processing = true;
-    	MU_ClearStatusFlags(APP_MU, kMU_Rx0FullFlag);
-        MU_DisableInterrupts(APP_MU, kMU_Rx0FullInterruptEnable);
-		program_stage = RUN;
-    }
-    else
-    {
-    	PRINTF("Unexpected interrupt\r\n");
-    }
+//    uint32_t flag = MU_GetStatusFlags(APP_MU);
+//
+//    if (((flag & kMU_Tx0EmptyFlag) == kMU_Tx0EmptyFlag) && (program_stage == SRC_BUFFER_SEND))
+//    {
+//    	MU_ClearStatusFlags(APP_MU, kMU_Tx0EmptyFlag);
+//		MU_DisableInterrupts(APP_MU, kMU_Tx0EmptyInterruptEnable);
+//#ifndef Q31
+//		MU_SendMsgNonBlocking(APP_MU, CHN_MU_REG_NUM, (uint32_t)src_test_arr_f32);
+//#else
+//		MU_SendMsgNonBlocking(APP_MU, CHN_MU_REG_NUM, (uint32_t)src_test_arr_q31);
+//#endif
+//		program_stage = DST_BUFFER_RCV;
+//    }
+//    else if (((flag & kMU_Rx0FullFlag) == kMU_Rx0FullFlag) && (program_stage == DST_BUFFER_RCV))
+//    {
+//#ifndef Q31
+//    	dst_test_arr_f32 = (float32_t *)MU_ReceiveMsgNonBlocking(APP_MU, CHN_MU_REG_NUM);
+//#else
+//    	dst_test_arr_q31 = (q31_t *)MU_ReceiveMsgNonBlocking(APP_MU, CHN_MU_REG_NUM);
+//#endif
+//    	hifi4_ctrl.is_hifi4_processing = true;
+//    	MU_ClearStatusFlags(APP_MU, kMU_Rx0FullFlag);
+//        MU_DisableInterrupts(APP_MU, kMU_Rx0FullInterruptEnable);
+//		program_stage = RUN;
+//    }
+//    else
+//    {
+//    	PRINTF("Unexpected interrupt\r\n");
+//    }
 }
 
 void APP_MU_IRQHandler_0(void)
 {
     uint32_t flag = MU_GetStatusFlags(APP_MU);
 
-    if (((flag & kMU_Tx0EmptyFlag) == kMU_Tx0EmptyFlag) && (program_stage == SRC_BUFFER_SEND))
+    if ((flag & kMU_Tx0EmptyFlag) == kMU_Tx0EmptyFlag && (program_stage < DST_BUFFER_1_RCV))
     {
-    	MU_ClearStatusFlags(APP_MU, kMU_Tx0EmptyFlag);
-		MU_DisableInterrupts(APP_MU, kMU_Tx0EmptyInterruptEnable);
-#ifndef Q31
-		MU_SendMsgNonBlocking(APP_MU, CHN_MU_REG_NUM, (uint32_t)src_buffer_f32_1);
-#else
-		MU_SendMsgNonBlocking(APP_MU, CHN_MU_REG_NUM, (uint32_t)src_buffer_q31_1);
-#endif
-		program_stage = DST_BUFFER_RCV;
+		MU_ClearStatusFlags(APP_MU, kMU_Tx0EmptyFlag);
+    	switch (program_stage)
+    	{
+    		case SRC_BUFFER_1_SEND:
+    		{
+				#ifndef Q31
+    			MU_SendMsgNonBlocking(APP_MU, CHN_MU_REG_NUM, (uint32_t)src_buffer_f32_1);
+				#else
+    			MU_SendMsgNonBlocking(APP_MU, CHN_MU_REG_NUM, (uint32_t)src_buffer_q31_1);
+				#endif
+    			program_stage = SRC_BUFFER_2_SEND;
+    			break;
+    		}
+    		case SRC_BUFFER_2_SEND:
+    		{
+    			MU_DisableInterrupts(APP_MU, kMU_Tx0EmptyInterruptEnable);
+				#ifndef Q31
+    			MU_SendMsgNonBlocking(APP_MU, CHN_MU_REG_NUM, (uint32_t)src_buffer_f32_2);
+				#else
+    			MU_SendMsgNonBlocking(APP_MU, CHN_MU_REG_NUM, (uint32_t)src_buffer_q31_2);
+				#endif
+    			program_stage = DST_BUFFER_1_RCV;
+    			break;
+    		}
+    		default:
+    		{
+    			PRINTF("Program flow error - unexpected interrupt\r\nExiting with code -1\r\n");
+    			exit(-1);
+    		}
+    	}
     }
-    else if (((flag & kMU_Rx0FullFlag) == kMU_Rx0FullFlag) && (program_stage == DST_BUFFER_RCV))
+    else if ((flag & kMU_Rx0FullFlag) == kMU_Rx0FullFlag && (program_stage > SRC_BUFFER_2_SEND))
     {
-#ifndef Q31
-    	dst_buffer_f32_1 = (float32_t *)MU_ReceiveMsgNonBlocking(APP_MU, CHN_MU_REG_NUM);
-#else
-    	dst_buffer_q31_1 = (q31_t *)MU_ReceiveMsgNonBlocking(APP_MU, CHN_MU_REG_NUM);
-#endif
-    	hifi4_ctrl.is_hifi4_processing = true;
     	MU_ClearStatusFlags(APP_MU, kMU_Rx0FullFlag);
-        MU_DisableInterrupts(APP_MU, kMU_Rx0FullInterruptEnable);
-		program_stage = RUN;
-    }
-    else
-    {
-    	PRINTF("Unexpected interrupt\r\n");
+    	switch (program_stage)
+    	{
+    		case DST_BUFFER_1_RCV:
+    		{
+				#ifndef Q31
+				dst_buffer_f32_1 = (float32_t *)MU_ReceiveMsgNonBlocking(APP_MU, CHN_MU_REG_NUM);
+				#else
+				dst_buffer_q31_1 = (q31_t *)MU_ReceiveMsgNonBlocking(APP_MU, CHN_MU_REG_NUM);
+				#endif
+				program_stage = DST_BUFFER_2_RCV;
+    			break;
+			}
+    		case DST_BUFFER_2_RCV:
+    		{
+    			MU_DisableInterrupts(APP_MU, kMU_Rx0FullInterruptEnable);
+				#ifndef Q31
+				dst_buffer_f32_2 = (float32_t *)MU_ReceiveMsgNonBlocking(APP_MU, CHN_MU_REG_NUM);
+				#else
+				dst_buffer_q31_2 = (q31_t *)MU_ReceiveMsgNonBlocking(APP_MU, CHN_MU_REG_NUM);
+				#endif
+				hifi4_ctrl.is_hifi4_processing = true;
+				program_stage = RUN;
+    			break;
+			}
+			default:
+			{
+				PRINTF("Program flow error - unexpected interrupt\r\nExiting with code -2\r\n");
+				exit(-2);
+				break;
+			}
+		}
     }
 }
 
@@ -504,16 +623,14 @@ int main(void)
 {
 	check_coefficients();
 
-#ifdef PQ_USED
+	#ifdef PQ_USED
     /* Power up PQ RAM. */
     SYSCTL0->PDRUNCFG1_CLR = SYSCTL0_PDRUNCFG1_PQ_SRAM_APD_MASK | SYSCTL0_PDRUNCFG1_PQ_SRAM_PPD_MASK;
 
     /* Apply power setting. */
     POWER_ApplyPD();
     PQ_Init(POWERQUAD);
-#endif
-
-    CLOCK_AttachClk(kSFRO_to_CTIMER2);
+	#endif
 
     BOARD_InitBootPins();
     BOARD_InitBootClocks();
