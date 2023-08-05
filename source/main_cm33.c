@@ -197,9 +197,6 @@ static void init_hifi4(void)
     while (!hifi4_ctrl.is_hifi4_processing)
     {
     }
-
-//	SEMA42_Lock(APP_SEMA42, SEMA42_GATE, PROC_NUM);
-//	MU_SetFlags(APP_MU, SEMA42_LOCK_FLAG);
 }
 
 static void start_digital_loopback(void)
@@ -244,7 +241,6 @@ static void start_digital_loopback(void)
 static void TxCallback(I2S_Type *base, i2s_dma_handle_t *handle, status_t completionStatus, void *userData)
 {
 	I2S_TransferAbortDMA(I2S_TX, &txHandle);
-//	__NOP();
 }
 
 static void RxCallback(I2S_Type *base, i2s_dma_handle_t *handle, status_t completionStatus, void *userData)
@@ -252,8 +248,6 @@ static void RxCallback(I2S_Type *base, i2s_dma_handle_t *handle, status_t comple
 	i2s_transfer_t *transfer = (i2s_transfer_t *)userData;
 	static int call_cnt = 0;
 	static bool is_intA = false;
-
-//	I2S_TransferAbortDMA(I2S_RX, &rxHandle);
 
 	if (call_cnt == 1000)
 	{
@@ -263,15 +257,11 @@ static void RxCallback(I2S_Type *base, i2s_dma_handle_t *handle, status_t comple
 		assert(transfer->dataSize == (BUFFER_SIZE * (sizeof(src_buffer_16_1[0]) / sizeof(transfer->data[0]))));
 		assert((void *)&transfer->data[0] == (void *)&src_buffer_16_1[0]);
 
-		for (int i = 0; i < BUFFER_SIZE; ++i)
+		for (int i = 0, j = 0, k = (BUFFER_SIZE/2); i < BUFFER_SIZE; i += 2, ++j, ++k)
 		{
-			src_buffer_f32_1[i] = (float32_t)src_buffer_16_1[i];
+			src_buffer_f32_1[j] = (float32_t)src_buffer_16_1[i];
+			src_buffer_f32_1[k] = (float32_t)src_buffer_16_1[i+1];
 		}
-
-//		PRINTF("\r\nsrc_buffer_16_1:\r\n");
-//		print_buffer_data_16(src_buffer_16_1, BUFFER_SIZE);
-//		PRINTF("\r\nsrc_buffer_f32_1:\r\n");
-//		print_buffer_data_f32((float32_t *)src_buffer_f32_1, BUFFER_SIZE);
 
 		MU_SetFlags(APP_MU, SEMA42_UNLOCK_FLAG);
 		SEMA42_Unlock(APP_SEMA42, SEMA42_GATE);
@@ -280,15 +270,11 @@ static void RxCallback(I2S_Type *base, i2s_dma_handle_t *handle, status_t comple
 		}
 		SEMA42_Lock(APP_SEMA42, SEMA42_GATE, PROC_NUM);
 
-		for (int i = 0; i < BUFFER_SIZE; ++i)
+		for (int i = 0, j = 0, k = (BUFFER_SIZE/2); i < BUFFER_SIZE; i += 2, ++j, ++k)
 		{
-			dst_buffer_16_1[i] = (int16_t)dst_buffer_f32_1[i];
+			dst_buffer_16_1[i] = (int16_t)dst_buffer_f32_1[j];
+			dst_buffer_16_1[i+1] = (int16_t)dst_buffer_f32_1[k];
 		}
-
-//		PRINTF("\r\ndst_buffer_16_1:\r\n");
-//		print_buffer_data_16(dst_buffer_16_1, BUFFER_SIZE);
-//		PRINTF("\r\ndst_buffer_f32_1:\r\n");
-//		print_buffer_data_f32((float32_t *)dst_buffer_f32_1, BUFFER_SIZE);
 	}
 	else if (call_cnt == 1001)
 	{
@@ -300,9 +286,10 @@ static void RxCallback(I2S_Type *base, i2s_dma_handle_t *handle, status_t comple
 		assert(transfer->dataSize == (BUFFER_SIZE * (sizeof(src_buffer_16_2[0]) / sizeof(transfer->data[0]))));
 		assert((void *)&transfer->data[0] == (void *)&src_buffer_16_1[0]);
 
-		for (int i = 0; i < BUFFER_SIZE; ++i)
+		for (int i = 0, j = 0, k = (BUFFER_SIZE/2); i < BUFFER_SIZE; i += 2, ++j, ++k)
 		{
-			src_buffer_f32_2[i] = (float32_t)src_buffer_16_2[i];
+			src_buffer_f32_2[j] = (float32_t)src_buffer_16_2[i];
+			src_buffer_f32_2[k] = (float32_t)src_buffer_16_2[i+1];
 		}
 
 		PRINTF("\r\nsrc_buffer_16_1:\r\n");
@@ -321,9 +308,10 @@ static void RxCallback(I2S_Type *base, i2s_dma_handle_t *handle, status_t comple
 		}
 		SEMA42_Lock(APP_SEMA42, SEMA42_GATE, PROC_NUM);
 
-		for (int i = 0; i < BUFFER_SIZE; ++i)
+		for (int i = 0, j = 0, k = (BUFFER_SIZE/2); i < BUFFER_SIZE; i += 2, ++j, ++k)
 		{
-			dst_buffer_16_2[i] = (int16_t)dst_buffer_f32_2[i];
+			dst_buffer_16_2[i] = (int16_t)dst_buffer_f32_2[j];
+			dst_buffer_16_2[i+1] = (int16_t)dst_buffer_f32_2[k];
 		}
 
 		PRINTF("\r\ndst_buffer_16_1:\r\n");
@@ -341,7 +329,6 @@ static void RxCallback(I2S_Type *base, i2s_dma_handle_t *handle, status_t comple
 
 //	if (is_intA)
 //	{
-//		i2s_transfer_t *transfer = (i2s_transfer_t *)userData;
 //		assert(transfer->dataSize == (BUFFER_SIZE * (sizeof(src_buffer_16_1[0]) / sizeof(transfer->data[0]))));
 //		assert((void *)&transfer->data[0] == (void *)&src_buffer_16_1[0]);
 //
