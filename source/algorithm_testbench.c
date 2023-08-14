@@ -12,7 +12,7 @@
 #include "fsl_device_registers.h"
 #include "fsl_powerquad.h"
 
-#include "drc_algorithms_cm33.h"
+#include "drc_algorithms.h"
 #include "algorithm_testbench.h"
 #include "filters_cfg.h"
 #include "main_cm33.h"

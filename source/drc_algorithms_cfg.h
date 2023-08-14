@@ -5,8 +5,8 @@
  *      Author: Łukasz
  */
 
-#ifndef DRC_ALGORITHMS_CM33_CFG_H_
-#define DRC_ALGORITHMS_CM33_CFG_H_
+#ifndef DRC_ALGORITHMS_CFG_H_
+#define DRC_ALGORITHMS_CFG_H_
 
 /*******************************************************************************
  * Includes
@@ -16,7 +16,6 @@
 /*******************************************************************************
  * Definitions
  ******************************************************************************/
-#define PQ_USED
 //#define _16bit
 
 /*******************************************************************************
@@ -59,4 +58,4 @@
 /* noise gate threshold */
 #define NT 	((float32_t)(MAX_AMPL * 0.2f * HALF_SQRT_2))
 
-#endif /* DRC_ALGORITHMS_CM33_CFG_H_ */
+#endif /* DRC_ALGORITHMS_CFG_H_ */

@@ -14,7 +14,7 @@
 #include "fsl_device_registers.h"
 #include "fsl_mu.h"
 #include "fsl_sema42.h"
-
+#include "arm_math.h"
 /*******************************************************************************
  * Definitions
  ******************************************************************************/
@@ -34,5 +34,11 @@
 #define PROC_NUM				1U
 /* Receive/transmit buffer size */
 #define BUFFER_SIZE				160
+
+/*******************************************************************************
+ * Exported variables
+ ******************************************************************************/
+extern float32_t scale_down_factor;
+extern float32_t scale_up_factor;
 
 #endif /* MAIN_CM33_H_ */

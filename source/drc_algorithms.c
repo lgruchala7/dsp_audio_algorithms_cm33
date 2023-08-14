@@ -41,8 +41,8 @@
 
 #include "fsl_powerquad.h"
 
-#include "drc_algorithms_cm33.h"
-#include "drc_algorithms_cm33_cfg.h"
+#include "drc_algorithms.h"
+#include "drc_algorithms_cfg.h"
 #include "main_cm33.h"
 
 /*******************************************************************************
