@@ -40,10 +40,10 @@
 #include <math.h>
 
 #include "fsl_powerquad.h"
-#include "fsl_power.h"
 
 #include "drc_algorithms_cm33.h"
-#include "drc_algorithms_cm33_conf.h"
+#include "drc_algorithms_cm33_cfg.h"
+#include "main_cm33.h"
 
 /*******************************************************************************
  * Definitions
@@ -51,10 +51,10 @@
 #ifdef PQ_USED
 #define LOG2(p_src, p_dst) 	do { \
 								PQ_LnF32(p_src, p_dst); \
-								PQ_DivF32(p_dst, (float *)&LN_OF_2, p_dst); \
+								PQ_DivF32(p_dst, (float32_t *)&LN_OF_2, p_dst); \
 							} while (0)
 #else
-#define LOG2(x) 				(logf(x) / LN_OF_2)
+#define LOG2(x) 			(logf(x) / LN_OF_2)
 
 #endif
 
@@ -70,21 +70,21 @@ enum {
 /*******************************************************************************
  * Variables
  ******************************************************************************/
-const static float LN_OF_2 = 0.693147f;
-static float AT;
-static float RT;
-static float RT_ctrl_fctr;
-static float AT_ctrl_fctr;
-static float TAV;
-static float log2_LT;
-static float log2_CT;
-static float log2_ET;
-static float log2_NT;
-static float diff_ET_NT;
-static float ES_times_diff_ET_NT;
-static float one_minus_AT;
-static float one_minus_RT;
-static float one_minus_TAV;
+const static float32_t LN_OF_2 = 0.693147f;
+static float32_t AT;
+static float32_t RT;
+static float32_t RT_ctrl_fctr;
+static float32_t AT_ctrl_fctr;
+static float32_t TAV;
+static float32_t log2_LT;
+static float32_t log2_CT;
+static float32_t log2_ET;
+static float32_t log2_NT;
+static float32_t diff_ET_NT;
+static float32_t ES_times_diff_ET_NT;
+static float32_t one_minus_AT;
+static float32_t one_minus_RT;
+static float32_t one_minus_TAV;
 
 /*******************************************************************************
  * Code
@@ -100,18 +100,18 @@ void check_coefficients(void)
 
 void calculate_coefficients(void)
 {
-	AT = (float)(1.0 - exp(-2.2 * 1000.0 / (t_at_ms * fs_hz)));
-	RT = (float)(1.0 - exp(-2.2 * 1000.0 / (t_re_ms * fs_hz)));
-	TAV = (float)(1.0 - exp((-2.2 * 1000.0) / (t_tav_ms * fs_hz)));
-	AT_ctrl_fctr = (float)(1.0 - exp(-2.2 * 1000.0 / ((t_at_ms) * fs_hz)));
-	RT_ctrl_fctr = (float)(1.0 - exp(-2.2 * 1000.0 / ((t_re_ms) * fs_hz)));
+	AT = (float32_t)(1.0 - exp(-2.2 * 1000.0 / (t_at_ms * fs_hz)));
+	RT = (float32_t)(1.0 - exp(-2.2 * 1000.0 / (t_re_ms * fs_hz)));
+	TAV = (float32_t)(1.0 - exp((-2.2 * 1000.0) / (t_tav_ms * fs_hz)));
+	AT_ctrl_fctr = (float32_t)(1.0 - exp(-2.2 * 1000.0 / ((t_at_ms) * fs_hz)));
+	RT_ctrl_fctr = (float32_t)(1.0 - exp(-2.2 * 1000.0 / ((t_re_ms) * fs_hz)));
 #ifdef PQ_USED
 	/*  casting to suppress discarded qualifier warning */
-	float lt = LT, ct = CT, et = ET, nt = NT;
-	LOG2((float *)&lt, &log2_LT);
-	LOG2((float *)&ct, &log2_CT);
-	LOG2((float *)&et, &log2_ET);
-	LOG2((float *)&nt, &log2_NT);
+	float32_t lt = LT, ct = CT, et = ET, nt = NT;
+	LOG2((float32_t *)&lt, &log2_LT);
+	LOG2((float32_t *)&ct, &log2_CT);
+	LOG2((float32_t *)&et, &log2_ET);
+	LOG2((float32_t *)&nt, &log2_NT);
 #else
 	log2_LT = LOG2(LT);
 	log2_CT = LOG2(CT);
@@ -127,14 +127,14 @@ void calculate_coefficients(void)
 
 void limiter_16(int16_t * src_signal_arr, int16_t * dst_signal_arr, size_t signal_arr_count)
 {
-	static float x_peak[CHANNEL_CNT] = {[0 ... (CHANNEL_CNT - 1)] = 0.0f};
-	static float ctrl_factor_old[CHANNEL_CNT] = {[0 ... (CHANNEL_CNT - 1)] = 1.0f};
-	static float ctrl_factor_smooth[CHANNEL_CNT] = {[0 ... (CHANNEL_CNT - 1)] = 1.0f};
-	float x_peak_abs = 0.0f;
-	float x_peak_log = 0.0f;
-	float ctrl_factor = 0.0f;
-	float ctrl_factor_exp = 0.0f;
-	float k = 0.0f;
+	static float32_t x_peak[CHANNEL_CNT] = {[0 ... (CHANNEL_CNT - 1)] = 0.0f};
+	static float32_t ctrl_factor_old[CHANNEL_CNT] = {[0 ... (CHANNEL_CNT - 1)] = 1.0f};
+	static float32_t ctrl_factor_smooth[CHANNEL_CNT] = {[0 ... (CHANNEL_CNT - 1)] = 1.0f};
+	float32_t x_peak_abs = 0.0f;
+	float32_t x_peak_log = 0.0f;
+	float32_t ctrl_factor = 0.0f;
+	float32_t ctrl_factor_exp = 0.0f;
+	float32_t k = 0.0f;
 
 #ifdef _DEBUG
 	PRINTF("$");
@@ -143,7 +143,7 @@ void limiter_16(int16_t * src_signal_arr, int16_t * dst_signal_arr, size_t signa
 	{
 		for (uint32_t i = channel; i < signal_arr_count; i += 2)
 		{
-			float abs_sample = fabsf((float)src_signal_arr[i]);
+			float32_t abs_sample = fabsf((float32_t)src_signal_arr[i]);
 			if (abs_sample > x_peak[channel])
 			{
 				x_peak[channel] = one_minus_AT * x_peak[channel] + AT * abs_sample;
@@ -201,14 +201,14 @@ void limiter_16(int16_t * src_signal_arr, int16_t * dst_signal_arr, size_t signa
 
 void compressor_expander_ngate_16(int16_t * src_signal_arr, int16_t * dst_signal_arr, size_t signal_arr_count)
 {
-	static float x_rms_pow2[CHANNEL_CNT] = {[0 ... (CHANNEL_CNT - 1)] = 0.0f};
-	static float ctrl_factor_old[CHANNEL_CNT] = {[0 ... (CHANNEL_CNT - 1)] = 1.0f};
-	static float ctrl_factor_smooth[CHANNEL_CNT] = {[0 ... (CHANNEL_CNT - 1)] = 1.0f};
-	float x_rms;
-	float x_rms_log;
-	float ctrl_factor;
-	float ctrl_factor_exp;
-	float k;
+	static float32_t x_rms_pow2[CHANNEL_CNT] = {[0 ... (CHANNEL_CNT - 1)] = 0.0f};
+	static float32_t ctrl_factor_old[CHANNEL_CNT] = {[0 ... (CHANNEL_CNT - 1)] = 1.0f};
+	static float32_t ctrl_factor_smooth[CHANNEL_CNT] = {[0 ... (CHANNEL_CNT - 1)] = 1.0f};
+	float32_t x_rms;
+	float32_t x_rms_log;
+	float32_t ctrl_factor;
+	float32_t ctrl_factor_exp;
+	float32_t k;
 
 #ifdef _DEBUG
 	PRINTF("$");

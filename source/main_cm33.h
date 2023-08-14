@@ -18,7 +18,9 @@
 /*******************************************************************************
  * Definitions
  ******************************************************************************/
-//#define Q31
+#define Q31_USED
+#define HIFI4_USED
+//#define PQ_USED
 
 #define APP_MU            		MUA
 #define APP_SEMA42          	SEMA42
@@ -30,5 +32,7 @@
 /* Channel transmit and receive register */
 #define CHN_MU_REG_NUM 			0U
 #define PROC_NUM				1U
+/* Receive/transmit buffer size */
+#define BUFFER_SIZE				160
 
 #endif /* MAIN_CM33_H_ */

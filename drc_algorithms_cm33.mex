@@ -43,8 +43,16 @@
                         <data>true</data>
                      </feature>
                   </dependency>
+                  <dependency resourceType="SWComponent" resourceId="platform.drivers.lpc_iopctl" description="Pins initialization requires the LPC_IOPCTL Driver in the project." problem_level="2" source="Pins:BOARD_InitPins">
+                     <feature name="enabled" evaluation="equal" configuration="cm33">
+                        <data>true</data>
+                     </feature>
+                  </dependency>
                </dependencies>
-               <pins/>
+               <pins>
+                  <pin peripheral="GPIO" signal="PIO0, 28" pin_num="D11" pin_signal="PIO0_28/FC4_SCK/CTIMER4_MAT0/I2S_BRIDGE_CLK_OUT/SEC_PIO0_28"/>
+                  <pin peripheral="GPIO" signal="PIO0, 27" pin_num="B3" pin_signal="PIO0_27/FC3_SSEL3/SCT0_GPI7/SCT0_OUT7/CTIMER0_MAT3/SEC_PIO0_27/ADC0_11"/>
+               </pins>
             </function>
             <function name="BOARD_InitCS42448Pins">
                <description>Configures pin routing and optionally pin electrical features.</description>
