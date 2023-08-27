@@ -140,14 +140,14 @@ void generate_sine_wave_f32(float32_t * input_vec, uint32_t vec_len, uint32_t fs
 	free(comp);
 }
 
-void measure_algorithm_time_16(void (*algorithm_func)(int16_t *, int16_t *, size_t), int16_t * src_buffer, int16_t * dst_buffer, size_t bytes, uint32_t iterations)
+void measure_algorithm_time_f32(void (*algorithm_func)(float32_t *, float32_t *, size_t), float32_t * src_buffer, float32_t * dst_buffer, size_t bytes, uint32_t iterations)
 {
 	volatile unsigned long previous_time = 0UL;
     unsigned long exec_time_ticks = 0UL;
     unsigned long exec_time_ticks_sum = 0UL;
     size_t buffer_len = (bytes / sizeof(int16_t));
     // write random values to buffer
-    init_arr_with_rand_16(src_buffer, buffer_len);
+    init_arr_with_rand_f32(src_buffer, buffer_len);
 
 	previous_time = MSDK_GetCpuCycleCount();
     // execute algorithm 'iterations' times
@@ -301,22 +301,22 @@ void write_buffer_data_to_file_16(int16_t * buffer, size_t buffer_len)
 	}
 }
 
-void test_drc_algorithm(void (*algorithm_func)(int16_t *, int16_t *, size_t), int16_t * src_buffer, int16_t * dst_buffer,
+void test_drc_algorithm(void (*algorithm_func)(float32_t *, float32_t *, size_t), float32_t * src_buffer, float32_t * dst_buffer,
 		size_t buffer_len, uint32_t fs)
 {
 	float freq[] 	= {9000.0f, 7000.0f, 1500.0f};
 	float amp[] 	= {0.1f, 0.2f, 2.0f};
 	int freq_cnt = sizeof(freq) / sizeof(freq[0]);
 
-	generate_sine_wave_16(&src_buffer[0], buffer_len/5, fs, (float)INT16_MAX * 0.15, freq, amp, freq_cnt);
-	generate_sine_wave_16(&src_buffer[1000], buffer_len/5, fs, (float)INT16_MAX * 0.40, freq, amp, freq_cnt);
-	generate_sine_wave_16(&src_buffer[2000], buffer_len/5, fs, (float)INT16_MAX * 0.65, freq, amp, freq_cnt);
-	generate_sine_wave_16(&src_buffer[3000], buffer_len/5, fs, (float)INT16_MAX * 0.8, freq, amp, freq_cnt);
-	generate_sine_wave_16(&src_buffer[4000], buffer_len/5, fs, (float)INT16_MAX * 0.95, freq, amp, freq_cnt);
+	generate_sine_wave_f32(&src_buffer[0], buffer_len/5, fs, (float)INT16_MAX * 0.15, freq, amp, freq_cnt);
+	generate_sine_wave_f32(&src_buffer[1000], buffer_len/5, fs, (float)INT16_MAX * 0.40, freq, amp, freq_cnt);
+	generate_sine_wave_f32(&src_buffer[2000], buffer_len/5, fs, (float)INT16_MAX * 0.65, freq, amp, freq_cnt);
+	generate_sine_wave_f32(&src_buffer[3000], buffer_len/5, fs, (float)INT16_MAX * 0.8, freq, amp, freq_cnt);
+	generate_sine_wave_f32(&src_buffer[4000], buffer_len/5, fs, (float)INT16_MAX * 0.95, freq, amp, freq_cnt);
 
-	write_buffer_data_to_file_16(src_buffer, buffer_len);
+	print_buffer_data_f32(src_buffer, buffer_len);
 	algorithm_func(src_buffer, dst_buffer, buffer_len);
-	write_buffer_data_to_file_16(dst_buffer, buffer_len);
+	print_buffer_data_f32(dst_buffer, buffer_len);
 }
 
 void test_hifi4_fir_q31(float32_t * src_buffer_f32, q31_t * src_buffer_q31, float32_t * dst_buffer_f32, q31_t * dst_buffer_q31,

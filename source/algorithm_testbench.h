@@ -22,11 +22,11 @@
 /*******************************************************************************
  * Prototypes
  ******************************************************************************/
-void measure_algorithm_time_16(void (*algorithm_func)(int16_t *, int16_t *, size_t), int16_t * src_buffer, int16_t * dst_buffer, size_t buffer_len, uint32_t iterations);
+void measure_algorithm_time_f32(void (*algorithm_func)(float32_t *, float32_t *, size_t), float32_t * src_buffer, float32_t * dst_buffer, size_t bytes, uint32_t iterations);
 void test_pq_math(float * arr, uint32_t iterations);
 void print_buffer_data_16(int16_t * buffer, size_t buffer_len);
 void print_buffer_data_32(int32_t * buffer, size_t buffer_len);
-void test_drc_algorithm(void (*algorithm_func)(int16_t *, int16_t *, size_t), int16_t * src_buffer, int16_t * dst_buffer, size_t buffer_size, uint32_t fs);
+void test_drc_algorithm(void (*algorithm_func)(float32_t *, float32_t *, size_t), float32_t * src_buffer, float32_t * dst_buffer, size_t buffer_len, uint32_t fs);
 void print_buffer_data_f32(float32_t * buffer, size_t buffer_len);
 void test_cmsis_dsp_f32(float32_t * src_arr, float32_t * dst_arr, uint32_t arr_len, uint32_t fs, uint32_t iterations);
 void generate_sine_wave_f32(float32_t * input_vec, uint32_t vec_len, uint32_t fs, float max_amplitude, float * freq, float * amp, int freq_cnt);

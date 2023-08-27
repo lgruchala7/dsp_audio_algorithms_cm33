@@ -15,11 +15,12 @@
 #include "fsl_mu.h"
 #include "fsl_sema42.h"
 #include "arm_math.h"
+#include <stdbool.h>
 /*******************************************************************************
  * Definitions
  ******************************************************************************/
 #define Q31_USED
-#define HIFI4_USED
+//#define HIFI4_USED
 //#define PQ_USED
 
 #define APP_MU            		MUA
@@ -34,6 +35,8 @@
 #define PROC_NUM				1U
 /* Receive/transmit buffer size */
 #define BUFFER_SIZE				160
+
+#define IS_IN_RANGE_INCL(arg, low, up)	(((arg) >= (low) && (arg) <= (up)) ? true : false)
 
 /*******************************************************************************
  * Exported variables
