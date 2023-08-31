@@ -134,10 +134,12 @@ volatile q31_t * src_buffer_q31_2 = NULL;
 #else
 volatile q31_t src_buffer_q31_1[BUFFER_SIZE] __attribute__((aligned(4)));
 volatile q31_t src_buffer_q31_2[BUFFER_SIZE] __attribute__((aligned(4)));
-volatile q31_t x_rms_log_1_q31[BUFFER_SIZE] = {Q31_ZERO};
-volatile q31_t x_rms_log_2_q31[BUFFER_SIZE] = {Q31_ZERO};
-volatile float32_t x_rms_log_1_f32[BUFFER_SIZE] = {0.0f};
-volatile float32_t x_rms_log_2_f32[BUFFER_SIZE] = {0.0f};
+volatile q31_t x_peak_log_q31_1[BUFFER_SIZE] = {Q31_ZERO};
+volatile q31_t x_peak_log_q31_2[BUFFER_SIZE] = {Q31_ZERO};
+//volatile q31_t x_peak_log_2_q31[BUFFER_SIZE] = {Q31_ZERO};
+volatile float32_t x_peak_log_f32_1[BUFFER_SIZE] = {0.0f};
+volatile float32_t x_peak_log_f32_2[BUFFER_SIZE] = {0.0f};
+//volatile float32_t x_peak_log_2_f32[BUFFER_SIZE] = {0.0f};
 #endif /* HIFI4_USED */
 #ifdef HIFI4_USED
 static volatile q31_t * dst_buffer_q31_1 = NULL;
@@ -146,6 +148,9 @@ static volatile q31_t * dst_buffer_q31_2 = NULL;
 volatile q31_t dst_buffer_q31_1[BUFFER_SIZE] __attribute__((aligned(4)));
 volatile q31_t dst_buffer_q31_2[BUFFER_SIZE] __attribute__((aligned(4)));
 #endif /* HIFI4_USED */
+#else
+//volatile float32_t x_peak_log_f32_1[BUFFER_SIZE] = {0.0f};
+//volatile float32_t x_peak_log_f32_2[BUFFER_SIZE] = {0.0f};
 #endif /* Q31_USED */
 
 static dma_handle_t dmaTxHandle;
@@ -302,7 +307,9 @@ static void RxCallback(I2S_Type *base, i2s_dma_handle_t *handle, status_t comple
 //	if (call_cnt == 1001)
 //	{
 //		I2S_TransferAbortDMA(I2S_RX, &rxHandle);
-//		__NOP();
+//		#ifdef DEBUG
+//		PRINTF("$");
+//		#endif
 //	}
 
 	if (!is_intA)
@@ -319,28 +326,24 @@ static void RxCallback(I2S_Type *base, i2s_dma_handle_t *handle, status_t comple
 
 		#ifdef Q31_USED
 //		fir_process_batch((q31_t *)src_buffer_q31_1, (q31_t *)dst_buffer_q31_1, BUFFER_SIZE);
-		drc_process_q31((q31_t *)src_buffer_q31_1, (q31_t *)dst_buffer_q31_1, BUFFER_SIZE);
+		drc_process_q31((q31_t *)src_buffer_q31_1, (q31_t *)dst_buffer_q31_1, BUFFER_SIZE, (q31_t *)x_peak_log_q31_1);
 		#else
-		drc_process_f32((float32_t *)src_buffer_f32_1, (float32_t *)dst_buffer_f32_1, BUFFER_SIZE);
+		drc_process_f32((float32_t *)src_buffer_f32_1, (float32_t *)dst_buffer_f32_1, BUFFER_SIZE, (float32_t *)x_peak_log_f32_1);
 //		fir_process_batch((float32_t *)src_buffer_f32_1, (float32_t *)dst_buffer_f32_1, BUFFER_SIZE);
 		#endif
 
 		#ifdef Q31_USED
 		arm_q31_to_float((q31_t *)dst_buffer_q31_1, (float32_t *)dst_buffer_f32_1, BUFFER_SIZE);
 		arm_scale_f32((float32_t *)dst_buffer_f32_1, scale_up_factor, (float32_t *)dst_buffer_f32_1, BUFFER_SIZE);
-		arm_q31_to_float((q31_t *)x_rms_log_1_q31, (float32_t *)x_rms_log_1_f32, BUFFER_SIZE); //*
-		arm_scale_f32((float32_t *)x_rms_log_1_f32, scale_up_factor, (float32_t *)x_rms_log_1_f32, BUFFER_SIZE);//*
+		arm_q31_to_float((q31_t *)x_peak_log_q31_1, (float32_t *)x_peak_log_f32_1, BUFFER_SIZE); //*
+		arm_scale_f32((float32_t *)x_peak_log_f32_1, scale_up_factor, (float32_t *)x_peak_log_f32_1, BUFFER_SIZE);//*
 		#endif
+
 		for (int i = 0, j = 0, k = (BUFFER_SIZE/2); i < BUFFER_SIZE; i += 2, ++j, ++k)
 		{
 			dst_buffer_32_1[i] = (int32_t)dst_buffer_f32_1[j];
 			dst_buffer_32_1[i+1] = (int32_t)dst_buffer_f32_1[k];
 		}
-//		for (int i = 0, j = 0, k = (BUFFER_SIZE/2); i < BUFFER_SIZE; i += 2, ++j, ++k)
-//		{
-//			x_rms_log_1_f32[i] = x_rms_log_1_f32[j];
-//			x_rms_log_1_f32[i+1] = x_rms_log_1_f32[k];
-//		}
 	}
 	else
 	{
@@ -356,32 +359,80 @@ static void RxCallback(I2S_Type *base, i2s_dma_handle_t *handle, status_t comple
 
 		#ifndef Q31_USED
 //		fir_process_batch((float32_t *)src_buffer_f32_2, (float32_t *)dst_buffer_f32_2, BUFFER_SIZE);
-		drc_process_f32((float32_t *)src_buffer_f32_2, (float32_t *)dst_buffer_f32_2, BUFFER_SIZE);
+		drc_process_f32((float32_t *)src_buffer_f32_2, (float32_t *)dst_buffer_f32_2, BUFFER_SIZE, (float32_t *)x_peak_log_f32_2);
 		#else
 //		fir_process_batch((q31_t *)src_buffer_q31_2, (q31_t *)dst_buffer_q31_2, BUFFER_SIZE);
-		drc_process_q31((q31_t *)src_buffer_q31_2, (q31_t *)dst_buffer_q31_2, BUFFER_SIZE);
+		drc_process_q31((q31_t *)src_buffer_q31_2, (q31_t *)dst_buffer_q31_2, BUFFER_SIZE, (q31_t *)x_peak_log_q31_2);
 		#endif
 
 		#ifdef Q31_USED
 		arm_q31_to_float((q31_t *)dst_buffer_q31_2, (float32_t *)dst_buffer_f32_2, BUFFER_SIZE);
 		arm_scale_f32((float32_t *)dst_buffer_f32_2, scale_up_factor, (float32_t *)dst_buffer_f32_2, BUFFER_SIZE);
-		arm_q31_to_float((q31_t *)x_rms_log_2_q31, (float32_t *)x_rms_log_2_f32, BUFFER_SIZE); //*
-		arm_scale_f32((float32_t *)x_rms_log_2_f32, scale_up_factor, (float32_t *)x_rms_log_2_f32, BUFFER_SIZE);//*
+		arm_q31_to_float((q31_t *)x_peak_log_q31_2, (float32_t *)x_peak_log_f32_2, BUFFER_SIZE); //*
+		arm_scale_f32((float32_t *)x_peak_log_f32_2, scale_up_factor, (float32_t *)x_peak_log_f32_2, BUFFER_SIZE);//*
 		#endif
+
 		for (int i = 0, j = 0, k = (BUFFER_SIZE/2); i < BUFFER_SIZE; i += 2, ++j, ++k)
 		{
 			dst_buffer_32_2[i] = (int32_t)dst_buffer_f32_2[j];
 			dst_buffer_32_2[i+1] = (int32_t)dst_buffer_f32_2[k];
 		}
-//		for (int i = 0, j = 0, k = (BUFFER_SIZE/2); i < BUFFER_SIZE; i += 2, ++j, ++k)
-//		{
-//			x_rms_log_2_f32[i] = x_rms_log_2_f32[j];
-//			x_rms_log_2_f32[i+1] = x_rms_log_2_f32[k];
-//		}
 	}
 
 //	if (call_cnt == 1001)
 //	{
+//		#ifdef DEBUG
+//		for (int i = 0; i < BUFFER_SIZE; i++)
+//		{
+//			PRINTF("%d, ", src_buffer_32_1[i]);
+//			if (i%20 == 18)
+//			{
+//				PRINTF("\r\n");
+//			}
+//		}
+//		for (int i = 0; i < BUFFER_SIZE; i++)
+//		{
+//			PRINTF("%d, ", src_buffer_32_2[i]);
+//			if (i%20 == 18)
+//			{
+//				PRINTF("\r\n");
+//			}
+//		}
+//		PRINTF("$");
+//		for (int i = 0; i < BUFFER_SIZE; i++)
+//		{
+//			PRINTF("%d, ", dst_buffer_32_1[i]);
+//			if (i%20 == 18)
+//			{
+//				PRINTF("\r\n");
+//			}
+//		}
+//		for (int i = 0; i < BUFFER_SIZE; i++)
+//		{
+//			PRINTF("%d, ", dst_buffer_32_2[i]);
+//			if (i%20 == 18)
+//			{
+//				PRINTF("\r\n");
+//			}
+//		}
+//		PRINTF("$");
+//		for (int i = 0; i < BUFFER_SIZE; i++)
+//		{
+//			PRINTF("%.3f, ", x_peak_log_f32_1[i]);
+//			if (i%20 == 18)
+//			{
+//				PRINTF("\r\n");
+//			}
+//		}
+//		for (int i = 0; i < BUFFER_SIZE; i++)
+//		{
+//			PRINTF("%.3f, ", x_peak_log_f32_2[i]);
+//			if (i%20 == 18)
+//			{
+//				PRINTF("\r\n");
+//			}
+//		}
+//		#endif
 //		PRINTF("\nsrc_buffer_32_1\r\n");
 //		print_buffer_data_32(src_buffer_32_1, BUFFER_SIZE);
 //		PRINTF("\nsrc_buffer_32_2\r\n");
@@ -390,10 +441,10 @@ static void RxCallback(I2S_Type *base, i2s_dma_handle_t *handle, status_t comple
 //		print_buffer_data_32(dst_buffer_32_1, BUFFER_SIZE);
 //		PRINTF("\ndst_buffer_32_2\r\n");
 //		print_buffer_data_32(dst_buffer_32_2, BUFFER_SIZE);
-////		PRINTF("\nx_rms_log_1\r\n");
-////		print_buffer_data_f32(x_rms_log_1_f32, BUFFER_SIZE);
-////		PRINTF("\nx_rms_log_2\r\n");
-////		print_buffer_data_f32(x_rms_log_2_f32, BUFFER_SIZE);
+//		PRINTF("\nx_peak_log_1\r\n");
+//		print_buffer_data_f32(x_peak_log_1_f32, BUFFER_SIZE);
+//		PRINTF("\nx_peak_log_2\r\n");
+//		print_buffer_data_f32(x_peak_log_2_f32, BUFFER_SIZE);
 //	}
 
 	call_cnt++;
