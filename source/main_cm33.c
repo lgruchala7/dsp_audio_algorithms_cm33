@@ -149,8 +149,8 @@ volatile q31_t dst_buffer_q31_1[BUFFER_SIZE] __attribute__((aligned(4)));
 volatile q31_t dst_buffer_q31_2[BUFFER_SIZE] __attribute__((aligned(4)));
 #endif /* HIFI4_USED */
 #else
-//volatile float32_t x_peak_log_f32_1[BUFFER_SIZE] = {0.0f};
-//volatile float32_t x_peak_log_f32_2[BUFFER_SIZE] = {0.0f};
+volatile float32_t x_peak_log_f32_1[BUFFER_SIZE] = {0.0f};
+volatile float32_t x_peak_log_f32_2[BUFFER_SIZE] = {0.0f};
 #endif /* Q31_USED */
 
 static dma_handle_t dmaTxHandle;
@@ -326,9 +326,9 @@ static void RxCallback(I2S_Type *base, i2s_dma_handle_t *handle, status_t comple
 
 		#ifdef Q31_USED
 //		fir_process_batch((q31_t *)src_buffer_q31_1, (q31_t *)dst_buffer_q31_1, BUFFER_SIZE);
-		drc_process_q31((q31_t *)src_buffer_q31_1, (q31_t *)dst_buffer_q31_1, BUFFER_SIZE, (q31_t *)x_peak_log_q31_1);
+		drc_full_stereo_balanced_q31((q31_t *)src_buffer_q31_1, (q31_t *)dst_buffer_q31_1, BUFFER_SIZE, (q31_t *)x_peak_log_q31_1);
 		#else
-		drc_process_f32((float32_t *)src_buffer_f32_1, (float32_t *)dst_buffer_f32_1, BUFFER_SIZE, (float32_t *)x_peak_log_f32_1);
+		drc_full_stereo_balanced_f32((float32_t *)src_buffer_f32_1, (float32_t *)dst_buffer_f32_1, BUFFER_SIZE, (float32_t *)x_peak_log_f32_1);
 //		fir_process_batch((float32_t *)src_buffer_f32_1, (float32_t *)dst_buffer_f32_1, BUFFER_SIZE);
 		#endif
 
@@ -359,10 +359,10 @@ static void RxCallback(I2S_Type *base, i2s_dma_handle_t *handle, status_t comple
 
 		#ifndef Q31_USED
 //		fir_process_batch((float32_t *)src_buffer_f32_2, (float32_t *)dst_buffer_f32_2, BUFFER_SIZE);
-		drc_process_f32((float32_t *)src_buffer_f32_2, (float32_t *)dst_buffer_f32_2, BUFFER_SIZE, (float32_t *)x_peak_log_f32_2);
+		drc_full_stereo_balanced_f32((float32_t *)src_buffer_f32_2, (float32_t *)dst_buffer_f32_2, BUFFER_SIZE, (float32_t *)x_peak_log_f32_2);
 		#else
 //		fir_process_batch((q31_t *)src_buffer_q31_2, (q31_t *)dst_buffer_q31_2, BUFFER_SIZE);
-		drc_process_q31((q31_t *)src_buffer_q31_2, (q31_t *)dst_buffer_q31_2, BUFFER_SIZE, (q31_t *)x_peak_log_q31_2);
+		drc_full_stereo_balanced_q31((q31_t *)src_buffer_q31_2, (q31_t *)dst_buffer_q31_2, BUFFER_SIZE, (q31_t *)x_peak_log_q31_2);
 		#endif
 
 		#ifdef Q31_USED
