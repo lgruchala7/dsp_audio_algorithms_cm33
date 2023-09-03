@@ -19,26 +19,39 @@
 #define FIR_ORDER			256U
 #define FIR_COEFF_COUNT		(FIR_ORDER + 1U)
 #define FIR_BLOCK_SIZE		16U
+#define IIR_SOS				33U
+#define COEFFS_PER_STAGE	5
+#define IIR_COEFF_COUNT		(IIR_SOS * COEFFS_PER_STAGE)
+#define IIR_BLOCK_SIZE		16U
+#define IIR_Q31_POSTSHIFT	0U
 
 /*******************************************************************************
  * Prototypes
  ******************************************************************************/
 void init_fir_filters(void);
+void init_iir_filters(void);
 #ifndef Q31_USED
 void fir_process_batch(float32_t * src_buffer, float32_t * dst_buffer, size_t buffer_size);
+void iir_process_batch(float32_t * src_buffer, float32_t * dst_buffer, size_t buffer_size);
 #else
 void fir_process_batch(q31_t * src_buffer, q31_t * dst_buffer, size_t buffer_size);
+void iir_process_batch(q31_t * src_buffer, q31_t * dst_buffer, size_t buffer_size);
 #endif
 
 /*******************************************************************************
  * Variables
  ******************************************************************************/
 extern const float32_t fir_filter_coeff_f32[FIR_COEFF_COUNT];
+extern const float32_t iir_filter_coeff_f32[IIR_COEFF_COUNT];
 #ifndef Q31_USED
 extern arm_fir_instance_f32 fir_instance_f32_1;
 extern arm_fir_instance_f32 fir_instance_f32_2;
 extern float32_t fir_state_f32_1[FIR_BLOCK_SIZE + FIR_COEFF_COUNT - 1];
 extern float32_t fir_state_f32_2[FIR_BLOCK_SIZE + FIR_COEFF_COUNT - 1];
+extern arm_biquad_casd_df1_inst_f32 iir_instance_f32_1;
+extern arm_biquad_casd_df1_inst_f32 iir_instance_f32_2;
+extern float32_t iir_state_f32_1[IIR_SOS * 4];
+extern float32_t iir_state_f32_2[IIR_SOS * 4];
 #else
 extern arm_fir_instance_q31 fir_instance_q31_1;
 extern arm_fir_instance_q31 fir_instance_q31_2;

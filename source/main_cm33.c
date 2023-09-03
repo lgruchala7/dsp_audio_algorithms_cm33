@@ -304,13 +304,13 @@ static void RxCallback(I2S_Type *base, i2s_dma_handle_t *handle, status_t comple
 
 	GPIO_PinWrite(GPIO, 0U, GPIO_DEBUG_PIN_RX, 1U);
 
-//	if (call_cnt == 1001)
-//	{
-//		I2S_TransferAbortDMA(I2S_RX, &rxHandle);
-//		#ifdef DEBUG
-//		PRINTF("$");
-//		#endif
-//	}
+	#if DEBUG == 1
+	if (call_cnt == 101)
+	{
+		I2S_TransferAbortDMA(I2S_RX, &rxHandle);
+		PRINTF("$");
+	}
+	#endif
 
 	if (!is_intA)
 	{
@@ -325,11 +325,11 @@ static void RxCallback(I2S_Type *base, i2s_dma_handle_t *handle, status_t comple
 		#endif
 
 		#ifdef Q31_USED
-//		fir_process_batch((q31_t *)src_buffer_q31_1, (q31_t *)dst_buffer_q31_1, BUFFER_SIZE);
-		drc_full_stereo_balanced_q31((q31_t *)src_buffer_q31_1, (q31_t *)dst_buffer_q31_1, BUFFER_SIZE, (q31_t *)x_peak_log_q31_1);
+		iir_process_batch((q31_t *)src_buffer_q31_1, (q31_t *)dst_buffer_q31_1, BUFFER_SIZE);
+//		drc_full_stereo_balanced_q31((q31_t *)src_buffer_q31_1, (q31_t *)dst_buffer_q31_1, BUFFER_SIZE, (q31_t *)x_peak_log_q31_1);
 		#else
-		drc_full_stereo_balanced_f32((float32_t *)src_buffer_f32_1, (float32_t *)dst_buffer_f32_1, BUFFER_SIZE, (float32_t *)x_peak_log_f32_1);
-//		fir_process_batch((float32_t *)src_buffer_f32_1, (float32_t *)dst_buffer_f32_1, BUFFER_SIZE);
+		iir_process_batch((float32_t *)src_buffer_f32_1, (float32_t *)dst_buffer_f32_1, BUFFER_SIZE);
+//		drc_full_stereo_balanced_f32((float32_t *)src_buffer_f32_1, (float32_t *)dst_buffer_f32_1, BUFFER_SIZE, (float32_t *)x_peak_log_f32_1);
 		#endif
 
 		#ifdef Q31_USED
@@ -358,11 +358,11 @@ static void RxCallback(I2S_Type *base, i2s_dma_handle_t *handle, status_t comple
 		#endif
 
 		#ifndef Q31_USED
-//		fir_process_batch((float32_t *)src_buffer_f32_2, (float32_t *)dst_buffer_f32_2, BUFFER_SIZE);
-		drc_full_stereo_balanced_f32((float32_t *)src_buffer_f32_2, (float32_t *)dst_buffer_f32_2, BUFFER_SIZE, (float32_t *)x_peak_log_f32_2);
+		iir_process_batch((float32_t *)src_buffer_f32_2, (float32_t *)dst_buffer_f32_2, BUFFER_SIZE);
+//		drc_full_stereo_balanced_f32((float32_t *)src_buffer_f32_2, (float32_t *)dst_buffer_f32_2, BUFFER_SIZE, (float32_t *)x_peak_log_f32_2);
 		#else
-//		fir_process_batch((q31_t *)src_buffer_q31_2, (q31_t *)dst_buffer_q31_2, BUFFER_SIZE);
-		drc_full_stereo_balanced_q31((q31_t *)src_buffer_q31_2, (q31_t *)dst_buffer_q31_2, BUFFER_SIZE, (q31_t *)x_peak_log_q31_2);
+		iir_process_batch((q31_t *)src_buffer_q31_2, (q31_t *)dst_buffer_q31_2, BUFFER_SIZE);
+//		drc_full_stereo_balanced_q31((q31_t *)src_buffer_q31_2, (q31_t *)dst_buffer_q31_2, BUFFER_SIZE, (q31_t *)x_peak_log_q31_2);
 		#endif
 
 		#ifdef Q31_USED
@@ -379,60 +379,59 @@ static void RxCallback(I2S_Type *base, i2s_dma_handle_t *handle, status_t comple
 		}
 	}
 
-//	if (call_cnt == 1001)
-//	{
-//		#ifdef DEBUG
-//		for (int i = 0; i < BUFFER_SIZE; i++)
-//		{
-//			PRINTF("%d, ", src_buffer_32_1[i]);
-//			if (i%20 == 18)
-//			{
-//				PRINTF("\r\n");
-//			}
-//		}
-//		for (int i = 0; i < BUFFER_SIZE; i++)
-//		{
-//			PRINTF("%d, ", src_buffer_32_2[i]);
-//			if (i%20 == 18)
-//			{
-//				PRINTF("\r\n");
-//			}
-//		}
-//		PRINTF("$");
-//		for (int i = 0; i < BUFFER_SIZE; i++)
-//		{
-//			PRINTF("%d, ", dst_buffer_32_1[i]);
-//			if (i%20 == 18)
-//			{
-//				PRINTF("\r\n");
-//			}
-//		}
-//		for (int i = 0; i < BUFFER_SIZE; i++)
-//		{
-//			PRINTF("%d, ", dst_buffer_32_2[i]);
-//			if (i%20 == 18)
-//			{
-//				PRINTF("\r\n");
-//			}
-//		}
-//		PRINTF("$");
-//		for (int i = 0; i < BUFFER_SIZE; i++)
-//		{
-//			PRINTF("%.3f, ", x_peak_log_f32_1[i]);
-//			if (i%20 == 18)
-//			{
-//				PRINTF("\r\n");
-//			}
-//		}
-//		for (int i = 0; i < BUFFER_SIZE; i++)
-//		{
-//			PRINTF("%.3f, ", x_peak_log_f32_2[i]);
-//			if (i%20 == 18)
-//			{
-//				PRINTF("\r\n");
-//			}
-//		}
-//		#endif
+	#if DEBUG == 1
+	if (call_cnt == 101)
+	{
+		for (int i = 0; i < BUFFER_SIZE; i++)
+		{
+			PRINTF("%d, ", src_buffer_32_1[i]);
+			if (i%20 == 18)
+			{
+				PRINTF("\r\n");
+			}
+		}
+		for (int i = 0; i < BUFFER_SIZE; i++)
+		{
+			PRINTF("%d, ", src_buffer_32_2[i]);
+			if (i%20 == 18)
+			{
+				PRINTF("\r\n");
+			}
+		}
+		PRINTF("$");
+		for (int i = 0; i < BUFFER_SIZE; i++)
+		{
+			PRINTF("%d, ", dst_buffer_32_1[i]);
+			if (i%20 == 18)
+			{
+				PRINTF("\r\n");
+			}
+		}
+		for (int i = 0; i < BUFFER_SIZE; i++)
+		{
+			PRINTF("%d, ", dst_buffer_32_2[i]);
+			if (i%20 == 18)
+			{
+				PRINTF("\r\n");
+			}
+		}
+		PRINTF("$");
+		for (int i = 0; i < BUFFER_SIZE; i++)
+		{
+			PRINTF("%.3f, ", x_peak_log_f32_1[i]);
+			if (i%20 == 18)
+			{
+				PRINTF("\r\n");
+			}
+		}
+		for (int i = 0; i < BUFFER_SIZE; i++)
+		{
+			PRINTF("%.3f, ", x_peak_log_f32_2[i]);
+			if (i%20 == 18)
+			{
+				PRINTF("\r\n");
+			}
+		}
 //		PRINTF("\nsrc_buffer_32_1\r\n");
 //		print_buffer_data_32(src_buffer_32_1, BUFFER_SIZE);
 //		PRINTF("\nsrc_buffer_32_2\r\n");
@@ -445,7 +444,8 @@ static void RxCallback(I2S_Type *base, i2s_dma_handle_t *handle, status_t comple
 //		print_buffer_data_f32(x_peak_log_1_f32, BUFFER_SIZE);
 //		PRINTF("\nx_peak_log_2\r\n");
 //		print_buffer_data_f32(x_peak_log_2_f32, BUFFER_SIZE);
-//	}
+	}
+	#endif /* DEBUG */
 
 	call_cnt++;
 	is_intA = (is_intA == true ? false : true);
@@ -800,6 +800,7 @@ int main(void)
     init_hifi4();
 	#else
     init_fir_filters();
+    init_iir_filters();
 	#endif
 
     start_digital_loopback();
