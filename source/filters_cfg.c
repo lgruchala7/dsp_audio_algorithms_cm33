@@ -15,19 +15,21 @@
 static uint32_t fir_num_blocks = (BUFFER_SIZE / FIR_BLOCK_SIZE / 2);
 static uint32_t iir_num_blocks = (BUFFER_SIZE / IIR_BLOCK_SIZE / 2);
 
-#ifndef PQ_USED
+#ifdef PQ_USED
+#ifndef Q31_USED
 static float32_t src_state_buffer[BUFFER_SIZE +  2 * (FIR_COEFF_COUNT - 1)];
 static float32_t dst_state_buffer[BUFFER_SIZE +  2 * (FIR_COEFF_COUNT - 1)];
 #else
 static q31_t src_state_buffer[BUFFER_SIZE +  2 * (FIR_COEFF_COUNT - 1)];
 static q31_t dst_state_buffer[BUFFER_SIZE +  2 * (FIR_COEFF_COUNT - 1)];
 #endif
+#endif
 
-const float32_t fir_filter_coeff_f32[FIR_COEFF_COUNT] = {
+const float32_t fir_coeff_f32[FIR_COEFF_COUNT] = {
 	/* cutoff 6kHz, order 256 */
 	0.0f, -0.000142095463926298f, -0.000203598484145306f, -0.000146364768649777f, 0.0f, 0.000152796255334117f, 0.000221823870954137f, 0.000161487217690435f, 0.0f, -0.000172536476232354f, -0.000253111426525135f, -0.000186044545777425f, 0.0f, 0.000202113832835479f, 0.000298599184600296f, 0.000220848866463926f, 0.0f, -0.000242356566655504f, -0.000359470896364611f, -0.000266746554889788f, 0.0f, 0.000294131512141478f, 0.000436968307791359f, 0.000324627590413839f, 0.0f, -0.000358354884777625f, -0.000532407533612327f, -0.000395437973970450f, 0.0f, 0.000436006538883024f, 0.000647200648234585f, 0.000480196069766373f, 0.0f, -0.000528148674789083f, -0.000782883983192874f, -0.000580014004716558f, 0.0f, 0.000635950311052743f, 0.000941155138348767f, 0.000696125658073407f, 0.0f, -0.000760719312910043f, -0.00112392144914783f, -0.000829923342363559f, 0.0f, 0.000903944450630234f, 0.00133336371102959f, 0.000983006098849127f, 0.0f, -0.00106735095564239f, -0.00157202051065915f, -0.00115724373801470f, 0.0f, 0.00125297451462210f, 0.00184290081687561f, 0.00135486255918409f, 0.0f, -0.00146326086157541f, -0.00214963597346358f, -0.00157856142905363f, 0.0f, 0.00170120154169663f, 0.00249668762992459f, 0.00183167116649932f, 0.0f, -0.00197052178649341f, -0.00288963667437853f, -0.00211837696848963f, 0.0f, 0.00227594508079392f, 0.00333559205593175f, 0.00244403468771380f, 0.0f, -0.00262357330092913f, -0.00384378142477216f, -0.00281563037311102f, 0.0f, 0.00302144569694921f, 0.00442642515110156f, 0.00324246475256718f, 0.0f, -0.00348038307159067f, -0.00510006593656665f, -0.00373720242153848f, 0.0f, 0.00401530265745672f, 0.00588765744666140f, 0.00431753458898457f, 0.0f, -0.00464734140520535f, -0.00682197091934482f, -0.00500891946123627f, 0.0f, 0.00540743416951147f, 0.00795140479312829f, 0.00584931437171450f, 0.0f, -0.00634266063239365f, -0.00935043979531675f, -0.00689782244903868f, 0.0f, 0.00752823196298245f, 0.0111397418830013f, 0.00825163780957785f, 0.0f, -0.00909198266861255f, -0.0135281916709367f, -0.0100823536463049f, 0.0f, 0.0112697959941345f, 0.0169109477103547f, 0.0127235246748694f, 0.0f, -0.0145497050974079f, -0.0221356107387184f, -0.0169198775073432f, 0.0f, 0.0201303896832348f, 0.0314071709056526f, 0.0247410730777657f, 0.0f, -0.0319516492901427f, -0.0528127241883479f, -0.0448815117930890f, 0.0f, 0.0749686340967730f, 0.159142724192092f, 0.225155374452901f, 0.250119395289229f, 0.225155374452901f, 0.159142724192092f, 0.0749686340967730f, 0.0f, -0.0448815117930890f, -0.0528127241883479f, -0.0319516492901427f, 0.0f, 0.0247410730777657f, 0.0314071709056526f, 0.0201303896832348f, 0.0f, -0.0169198775073432f, -0.0221356107387184f, -0.0145497050974079f, 0.0f, 0.0127235246748694f, 0.0169109477103547f, 0.0112697959941345f, 0.0f, -0.0100823536463049f, -0.0135281916709367f, -0.00909198266861255f, 0.0f, 0.00825163780957785f, 0.0111397418830013f, 0.00752823196298245f, 0.0f, -0.00689782244903868f, -0.00935043979531675f, -0.00634266063239365f, 0.0f, 0.00584931437171450f, 0.00795140479312829f, 0.00540743416951147f, 0.0f, -0.00500891946123627f, -0.00682197091934482f, -0.00464734140520535f, 0.0f, 0.00431753458898457f, 0.00588765744666140f, 0.00401530265745672f, 0.0f, -0.00373720242153848f, -0.00510006593656665f, -0.00348038307159067f, 0.0f, 0.00324246475256718f, 0.00442642515110156f, 0.00302144569694921f, 0.0f, -0.00281563037311102f, -0.00384378142477216f, -0.00262357330092913f, 0.0f, 0.00244403468771380f, 0.00333559205593175f, 0.00227594508079392f, 0.0f, -0.00211837696848963f, -0.00288963667437853f, -0.00197052178649341f, 0.0f, 0.00183167116649932f, 0.00249668762992459f, 0.00170120154169663f, 0.0f, -0.00157856142905363f, -0.00214963597346358f, -0.00146326086157541f, 0.0f, 0.00135486255918409f, 0.00184290081687561f, 0.00125297451462210f, 0.0f, -0.00115724373801470f, -0.00157202051065915f, -0.00106735095564239f, 0.0f, 0.000983006098849127f, 0.00133336371102959f, 0.000903944450630234f, 0.0f, -0.000829923342363559f, -0.00112392144914783f, -0.000760719312910043f, 0.0f, 0.000696125658073407f, 0.000941155138348767f, 0.000635950311052743f, 0.0f, -0.000580014004716558f, -0.000782883983192874f, -0.000528148674789083f, 0.0f, 0.000480196069766373f, 0.000647200648234585f, 0.000436006538883024f, 0.0f, -0.000395437973970450f, -0.000532407533612327f, -0.000358354884777625f, 0.0f, 0.000324627590413839f, 0.000436968307791359f, 0.000294131512141478f, 0.0f, -0.000266746554889788f, -0.000359470896364611f, -0.000242356566655504f, 0.0f, 0.000220848866463926f, 0.000298599184600296f, 0.000202113832835479f, 0.0f, -0.000186044545777425f, -0.000253111426525135f, -0.000172536476232354f, 0.0f, 0.000161487217690435f, 0.000221823870954137f, 0.000152796255334117f, 0.0f, -0.000146364768649777f, -0.000203598484145306f, -0.000142095463926298f, 0.0f
 };
-const float32_t iir_filter_coeff_f32[IIR_COEFF_COUNT] = {
+const float32_t iir_df1_coeff_f32[IIR_COEFF_COUNT] = {
 	/* cutoff 10kHz, order 66 */
 	0.035988055f,	0.07197611f,	0.035988055f,	0.416100782f,	-0.792953711f,
 	0.24593792f,	0.491875841f,	0.24593792f,	0.358093443f,	-0.543003515f,
@@ -97,55 +99,109 @@ const float32_t iir_filter_coeff_f32[IIR_COEFF_COUNT] = {
 //		1.0f,	0.654562367860189f,	0.936057748099734f,	 0.459200733978579f,	-0.871463775764269f,
 //		1.0f,	0.602541907884154f,	0.723085131866804f,	 0.451939152463407f,	-0.955424332775676f,
 };
+
+const float32_t iir_df2T_coeff_f32[IIR_COEFF_COUNT] = {
+	0.081151347f,	0.162302695f,	0.081151347f,	0.416100782f,	-0.792953711f,
+	0.177202897f,	0.354405794f,	0.177202897f,	0.358093443f,	-0.543003515f,
+	0.243742079f,	0.487484157f,	0.243742079f,	0.316575117f,	-0.364103495f,
+	0.289444386f,	0.578888773f,	0.289444386f,	0.286635666f,	-0.235096169f,
+	0.319454787f,	0.638909574f,	0.319454787f,	0.265219174f,	-0.142813768f,
+	0.336471322f,	0.672942644f,	0.336471322f,	0.250389528f,	-0.078913699f,
+	0.340185363f,	0.680370727f,	0.340185363f,	0.240928402f,	-0.038146263f,
+	0.301942282f,	0.603884564f,	0.301942282f,	0.23611087f,	-0.017387806f,
+	0.194665316f,	0.389330633f,	0.194665316f,	0.235320385f,	-0.01398165f,
+	0.196856394f,	0.393712788f,	0.196856394f,	0.23796906f,	-0.025394635f,
+	0.202708174f,	0.405416347f,	0.202708174f,	0.24504296f,	-0.055875655f,
+	0.212657948f,	0.425315897f,	0.212657948f,	0.257070705f,	-0.107702499f,
+	0.227492558f,	0.454985116f,	0.227492558f,	0.275003464f,	-0.184973696f,
+	0.24848634f,	0.49697268f,	0.24848634f,	0.300381713f,	-0.294327073f,
+	0.277649477f,	0.555298955f,	0.277649477f,	0.335635454f,	-0.446233364f,
+	0.318175645f,	0.63635129f,	0.318175645f,	0.384625349f,	-0.657327928f,
+	0.187732516f,	0.375465032f,	0.187732516f,	0.453650093f,	-0.954751477f,
+	0.108702874f,	0.217405747f,	0.108702874f,	0.399681548f,	-0.722204202f,
+	0.198087926f,	0.396175852f,	0.198087926f,	0.34640137f,	-0.492623058f,
+	0.262131914f,	0.524263829f,	0.262131914f,	0.308148545f,	-0.327793894f,
+	0.308112958f,	0.616225916f,	0.308112958f,	0.280573359f,	-0.208974044f,
+	0.340614139f,	0.681228278f,	0.340614139f,	0.260951915f,	-0.124426401f,
+	0.362549402f,	0.725098804f,	0.362549402f,	0.247556479f,	-0.066706258f,
+	0.375691113f,	0.751382226f,	0.375691113f,	0.239308211f,	-0.031164959f,
+	0.236859377f,	0.473718755f,	0.236859377f,	0.23558349f,	-0.015115356f,
+	0.195976063f,	0.391952127f,	0.195976063f,	0.236904876f,	-0.02080913f,
+	0.200883361f,	0.401766722f,	0.200883361f,	0.242837043f,	-0.046370487f,
+	0.209750263f,	0.419500527f,	0.209750263f,	0.253555762f,	-0.092556816f,
+	0.223266419f,	0.446532838f,	0.223266419f,	0.269894712f,	-0.162960388f,
+	0.242566376f,	0.485132752f,	0.242566376f,	0.293225388f,	-0.263490892f,
+	0.269444337f,	0.538888674f,	0.269444337f,	0.325716703f,	-0.403494051f,
+	0.306739667f,	0.613479334f,	0.306739667f,	0.370801013f,	-0.59775968f,
+	0.359047384f,	0.718094768f,	0.359047384f,	0.434032986f,	-0.870222522f,
+};
+
 #ifndef Q31_USED
 arm_fir_instance_f32 fir_instance_f32_1;
 arm_fir_instance_f32 fir_instance_f32_2;
 float32_t fir_state_f32_1[FIR_BLOCK_SIZE + FIR_COEFF_COUNT - 1];
 float32_t fir_state_f32_2[FIR_BLOCK_SIZE + FIR_COEFF_COUNT - 1];
-arm_biquad_casd_df1_inst_f32 iir_instance_f32_1;
-arm_biquad_casd_df1_inst_f32 iir_instance_f32_2;
-float32_t iir_state_f32_1[IIR_SOS * 4];
-float32_t iir_state_f32_2[IIR_SOS * 4];
+
+arm_biquad_casd_df1_inst_f32 iir_df1_instance_f32_1;
+arm_biquad_casd_df1_inst_f32 iir_df1_instance_f32_2;
+float32_t iir_df1_state_f32_1[IIR_SOS * 4];
+float32_t iir_df1_state_f32_2[IIR_SOS * 4];
+
+arm_biquad_cascade_df2T_instance_f32 iir_df2T_instance_f32_1;
+arm_biquad_cascade_df2T_instance_f32 iir_df2T_instance_f32_2;
+float32_t iir_df2T_state_f32_1[IIR_SOS * 2];
+float32_t iir_df2T_state_f32_2[IIR_SOS * 2];
 #else
 arm_fir_instance_q31 fir_instance_q31_1;
 arm_fir_instance_q31 fir_instance_q31_2;
 q31_t fir_state_q31_1[FIR_BLOCK_SIZE + FIR_COEFF_COUNT - 1];
 q31_t fir_state_q31_2[FIR_BLOCK_SIZE + FIR_COEFF_COUNT - 1];
-q31_t fir_filter_coeff_q31[FIR_COEFF_COUNT];
-arm_biquad_casd_df1_inst_q31 iir_instance_q31_1;
-arm_biquad_casd_df1_inst_q31 iir_instance_q31_2;
-q31_t iir_state_q31_1[IIR_SOS * 4];
-q31_t iir_state_q31_2[IIR_SOS * 4];
-q31_t iir_filter_coeff_q31[IIR_COEFF_COUNT];
+q31_t fir_coeff_q31[FIR_COEFF_COUNT];
+
+arm_biquad_casd_df1_inst_q31 iir_df1_instance_q31_1;
+arm_biquad_casd_df1_inst_q31 iir_df1_instance_q31_2;
+q31_t iir_df1_state_q31_1[IIR_SOS * 4];
+q31_t iir_df1_state_q31_2[IIR_SOS * 4];
+q31_t iir_df1_coeff_q31[IIR_COEFF_COUNT];
 #endif
 
 /*******************************************************************************
  * Code
  ******************************************************************************/
-void init_fir_filters(void)
+void init_fir_filter(void)
 {
 	#ifndef Q31_USED
-	arm_fir_init_f32(&fir_instance_f32_1, FIR_COEFF_COUNT, (float32_t *)&fir_filter_coeff_f32[0], &fir_state_f32_1[0], FIR_BLOCK_SIZE);
-	arm_fir_init_f32(&fir_instance_f32_2, FIR_COEFF_COUNT, (float32_t *)&fir_filter_coeff_f32[0], &fir_state_f32_2[0], FIR_BLOCK_SIZE);
+	arm_fir_init_f32(&fir_instance_f32_1, FIR_COEFF_COUNT, (float32_t *)&fir_coeff_f32[0], &fir_state_f32_1[0], FIR_BLOCK_SIZE);
+	arm_fir_init_f32(&fir_instance_f32_2, FIR_COEFF_COUNT, (float32_t *)&fir_coeff_f32[0], &fir_state_f32_2[0], FIR_BLOCK_SIZE);
 	#else
-	arm_float_to_q31(fir_filter_coeff_f32, fir_filter_coeff_q31, FIR_COEFF_COUNT);
-	arm_fir_init_q31(&fir_instance_q31_1, FIR_COEFF_COUNT, (q31_t *)&fir_filter_coeff_q31[0], &fir_state_q31_1[0], FIR_BLOCK_SIZE);
-	arm_fir_init_q31(&fir_instance_q31_2, FIR_COEFF_COUNT, (q31_t *)&fir_filter_coeff_q31[0], &fir_state_q31_2[0], FIR_BLOCK_SIZE);
+	arm_float_to_q31(fir_coeff_f32, fir_coeff_q31, FIR_COEFF_COUNT);
+	arm_fir_init_q31(&fir_instance_q31_1, FIR_COEFF_COUNT, (q31_t *)&fir_coeff_q31[0], &fir_state_q31_1[0], FIR_BLOCK_SIZE);
+	arm_fir_init_q31(&fir_instance_q31_2, FIR_COEFF_COUNT, (q31_t *)&fir_coeff_q31[0], &fir_state_q31_2[0], FIR_BLOCK_SIZE);
 	#endif
 }
 
 #ifndef PQ_USED
-void init_iir_filters(void)
+void init_iir_df1_filter(void)
 {
 	#ifndef Q31_USED
-	arm_biquad_cascade_df1_init_f32(&iir_instance_f32_1, IIR_SOS, (float32_t *)iir_filter_coeff_f32, iir_state_f32_1);
-	arm_biquad_cascade_df1_init_f32(&iir_instance_f32_2, IIR_SOS, (float32_t *)iir_filter_coeff_f32, iir_state_f32_2);
+	arm_biquad_cascade_df1_init_f32(&iir_df1_instance_f32_1, IIR_SOS, (float32_t *)iir_df1_coeff_f32, iir_df1_state_f32_1);
+	arm_biquad_cascade_df1_init_f32(&iir_df1_instance_f32_2, IIR_SOS, (float32_t *)iir_df1_coeff_f32, iir_df1_state_f32_2);
 	#else
-	arm_float_to_q31(iir_filter_coeff_f32, iir_filter_coeff_q31, IIR_COEFF_COUNT); //???
-	arm_biquad_cascade_df1_init_q31(&iir_instance_q31_1, IIR_SOS, (q31_t *)iir_filter_coeff_q31, iir_state_q31_1, IIR_Q31_POSTSHIFT);
-	arm_biquad_cascade_df1_init_q31(&iir_instance_q31_2, IIR_SOS, (q31_t *)iir_filter_coeff_q31, iir_state_q31_2, IIR_Q31_POSTSHIFT);
+	arm_float_to_q31(iir_df1_coeff_f32, iir_df1_coeff_q31, IIR_COEFF_COUNT); //???
+	arm_biquad_cascade_df1_init_q31(&iir_df1_instance_q31_1, IIR_SOS, (q31_t *)iir_df1_coeff_q31, iir_df1_state_q31_1, IIR_Q31_POSTSHIFT);
+	arm_biquad_cascade_df1_init_q31(&iir_df1_instance_q31_2, IIR_SOS, (q31_t *)iir_df1_coeff_q31, iir_df1_state_q31_2, IIR_Q31_POSTSHIFT);
 	#endif
 }
+#endif
+
+#ifndef Q31_USED
+#ifndef PQ_USED
+void init_iir_df2T_filter(void)
+{
+	arm_biquad_cascade_df2T_init_f32(&iir_df2T_instance_f32_1, IIR_SOS, (float32_t *)iir_df2T_coeff_f32, iir_df2T_state_f32_1);
+	arm_biquad_cascade_df2T_init_f32(&iir_df2T_instance_f32_2, IIR_SOS, (float32_t *)iir_df2T_coeff_f32, iir_df2T_state_f32_2);
+}
+#endif
 #endif
 
 #ifndef Q31_USED
@@ -250,15 +306,25 @@ void fir_process_batch(q31_t * src_buffer, q31_t * dst_buffer)
 #endif
 
 #ifndef Q31_USED
-void iir_process_batch(float32_t * src_buffer, float32_t * dst_buffer)
+void iir_df1_process_batch(float32_t * src_buffer, float32_t * dst_buffer)
 {
-	arm_biquad_cascade_df1_f32(&iir_instance_f32_1, &src_buffer[0], &dst_buffer[0], BUFFER_SIZE/2);
-	arm_biquad_cascade_df1_f32(&iir_instance_f32_2, &src_buffer[BUFFER_SIZE/2], &dst_buffer[BUFFER_SIZE/2], BUFFER_SIZE/2);
+	arm_biquad_cascade_df1_f32(&iir_df1_instance_f32_1, &src_buffer[0], &dst_buffer[0], BUFFER_SIZE/2);
+	arm_biquad_cascade_df1_f32(&iir_df1_instance_f32_2, &src_buffer[BUFFER_SIZE/2], &dst_buffer[BUFFER_SIZE/2], BUFFER_SIZE/2);
 }
 #else
-void iir_process_batch(q31_t * src_buffer, q31_t * dst_buffer)
+void iir_df1_process_batch(q31_t * src_buffer, q31_t * dst_buffer)
 {
-	arm_biquad_cascade_df1_q31(&iir_instance_q31_1, &src_buffer[0], &dst_buffer[0], BUFFER_SIZE/2);
-	arm_biquad_cascade_df1_q31(&iir_instance_q31_2, &src_buffer[BUFFER_SIZE/2], &dst_buffer[BUFFER_SIZE/2], BUFFER_SIZE/2);
+	arm_biquad_cascade_df1_q31(&iir_df1_instance_q31_1, &src_buffer[0], &dst_buffer[0], BUFFER_SIZE/2);
+	arm_biquad_cascade_df1_q31(&iir_df1_instance_q31_2, &src_buffer[BUFFER_SIZE/2], &dst_buffer[BUFFER_SIZE/2], BUFFER_SIZE/2);
 }
+#endif
+
+#ifndef Q31_USED
+#ifndef PQ_USED
+void iir_df2T_process_batch(float32_t * src_buffer, float32_t * dst_buffer)
+{
+	arm_biquad_cascade_df2T_f32(&iir_df2T_instance_f32_1, &src_buffer[0], &dst_buffer[0], BUFFER_SIZE/2);
+	arm_biquad_cascade_df2T_f32(&iir_df2T_instance_f32_2, &src_buffer[BUFFER_SIZE/2], &dst_buffer[BUFFER_SIZE/2], BUFFER_SIZE/2);
+}
+#endif
 #endif

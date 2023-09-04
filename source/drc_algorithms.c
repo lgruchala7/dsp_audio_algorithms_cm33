@@ -21,7 +21,7 @@
 #ifdef PQ_USED
 #define LOG2(src_ptr, dst_ptr) 	do { \
 									PQ_LnF32((src_ptr), (dst_ptr)); \
-									PQ_DivF32((src_ptr), (float32_t *)&LN_OF_2, (dst_ptr)); \
+									PQ_DivF32((dst_ptr), (float32_t *)&LN_OF_2, (dst_ptr)); \
 								} while (0)
 #else
 #define LOG2(src_ptr, dst_ptr)	(*(dst_ptr) = (logf(*(src_ptr)) / LN_OF_2))
@@ -791,8 +791,10 @@ void drc_full_f32(float32_t * src_signal_arr, float32_t * dst_signal_arr, size_t
 	}
 }
 #endif
+
 #ifndef Q31_USED
-void drc_full_stereo_balanced_f32(float32_t * src_signal_arr, float32_t * dst_signal_arr, size_t signal_arr_count, float32_t * x_peak_log2_array)
+#ifndef PQ_USED
+void drc_full_stereo_balanced_f32(float32_t * src_signal_arr, float32_t * dst_signal_arr, float32_t * x_peak_log2_array)
 {
 	static float32_t ctrl_factor_old = 1.0f;
 	static float32_t ctrl_factor_smooth = 1.0f;
@@ -801,11 +803,12 @@ void drc_full_stereo_balanced_f32(float32_t * src_signal_arr, float32_t * dst_si
 	float32_t ctrl_factor;
 	float32_t ctrl_factor_exp;
 	float32_t k;
-	int channel_offset = signal_arr_count / 2;
+	const static int channel_offset = BUFFER_SIZE / CHANNEL_CNT;
 
 	for (int i = 0; i < channel_offset; ++i)
 	{
 		float32_t avg_sample = ((src_signal_arr[i] + src_signal_arr[i + channel_offset]) / (float32_t)CHANNEL_CNT);
+
 		peak_log2_calculate_f32(avg_sample, &x_peak_log2, 0U);
 		rms_log2_calculate_f32(avg_sample, &x_rms_log2, 0U);
 
@@ -861,10 +864,89 @@ void drc_full_stereo_balanced_f32(float32_t * src_signal_arr, float32_t * dst_si
 		dst_signal_arr[i + channel_offset] = src_signal_arr[i + channel_offset] * ctrl_factor_smooth;
 	}
 }
+#else
+void drc_full_stereo_balanced_f32(float32_t * src_signal_arr, float32_t * dst_signal_arr, float32_t * x_peak_log2_array)
+{
+	static float32_t ctrl_factor_old = 1.0f;
+	static float32_t ctrl_factor_smooth = 1.0f;
+	float32_t x_rms_log2;
+	float32_t x_peak_log2;
+	float32_t ctrl_factor;
+	float32_t ctrl_factor_exp;
+	float32_t k;
+	float32_t avg_sample;
+	const static int channel_offset = BUFFER_SIZE / CHANNEL_CNT;
+
+	for (int i = 0; i < channel_offset; ++i)
+	{
+		float32_t num = src_signal_arr[i] + src_signal_arr[i + channel_offset];
+		float32_t den = (float32_t)CHANNEL_CNT;
+		PQ_DivF32(&num, &den, &avg_sample);
+
+		peak_log2_calculate_f32(avg_sample, &x_peak_log2, 0U);
+		rms_log2_calculate_f32(avg_sample, &x_rms_log2, 0U);
+
+		#ifdef DEBUG
+		x_peak_log2_array[i] = x_peak_log2;
+		x_peak_log2_array[i + channel_offset] = x_peak_log2;
+		#endif
+
+		if (x_peak_log2 > log2_LT)
+		{
+			ctrl_factor_exp = LS * (log2_LT - x_peak_log2) + CS_times_diff_CT_LT;
+			float32_t x_times_ln2 = ctrl_factor_exp * 0.693147f;
+			PQ_EtoxF32(&x_times_ln2, &ctrl_factor);
+		}
+		else if (x_rms_log2 > log2_CT)
+		{
+			ctrl_factor_exp = CS * (log2_CT - x_rms_log2);
+			float32_t x_times_ln2 = ctrl_factor_exp * 0.693147f;
+			PQ_EtoxF32(&x_times_ln2, &ctrl_factor);
+		}
+		else if (x_rms_log2 < log2_NT_MUTE)
+		{
+			ctrl_factor = 0.0f;
+		}
+		else if (x_rms_log2 < log2_NT)
+		{
+			ctrl_factor_exp = NS * (log2_NT - x_rms_log2) + ES_times_diff_ET_NT;
+			float32_t x_times_ln2 = ctrl_factor_exp * 0.693147f;
+			PQ_EtoxF32(&x_times_ln2, &ctrl_factor);
+		}
+		else if (x_rms_log2 < log2_ET)
+		{
+			ctrl_factor_exp = ES * (log2_ET - x_rms_log2);
+			float32_t x_times_ln2 = ctrl_factor_exp * 0.693147f;
+			PQ_EtoxF32(&x_times_ln2, &ctrl_factor);
+		}
+		else
+		{
+			ctrl_factor = 1.0f;
+		}
+
+		/* determine if control factor (in/de)creasing */
+		if (ctrl_factor < ctrl_factor_old)
+		{
+			k = RT_ctrl_factor;
+		}
+		else
+		{
+			k = AT_ctrl_factor;
+		}
+
+		/* smooth control factor */
+		ctrl_factor_smooth = (1.0f - k) * ctrl_factor_smooth + k * ctrl_factor;
+		ctrl_factor_old = ctrl_factor;
+		/* calculate output sample */
+		dst_signal_arr[i] = src_signal_arr[i] * ctrl_factor_smooth;
+		dst_signal_arr[i + channel_offset] = src_signal_arr[i + channel_offset] * ctrl_factor_smooth;
+	}
+}
+#endif
 #endif
 
 #ifdef Q31_USED
-void drc_full_stereo_balanced_q31(q31_t * src_signal_arr, q31_t * dst_signal_arr, size_t signal_arr_count, q31_t * x_peak_log2_array)
+void drc_full_stereo_balanced_q31(q31_t * src_signal_arr, q31_t * dst_signal_arr, q31_t * x_peak_log2_array)
 {
 	static q31_t ctrl_factor_old = 1.0f;
 	static q31_t ctrl_factor_smooth = 1.0f;
@@ -874,11 +956,11 @@ void drc_full_stereo_balanced_q31(q31_t * src_signal_arr, q31_t * dst_signal_arr
 	q31_t ctrl_factor_exp;
 	q31_t k;
 	int16_t shift;
-	int channel_offset = signal_arr_count / 2;
+	int channel_offset = BUFFER_SIZE / 2;
 
 	for (int i = 0; i < channel_offset; ++i)
 	{
-		q31_t avg_sample = (q31_t)(((q63_t)src_signal_arr[i] + (q63_t)src_signal_arr[i + channel_offset]) >> 1);
+		q31_t avg_sample = (q31_t)(((q63_t)src_signal_arr[i] + (q63_t)src_signal_arr[i + channel_offset]) >> 1); // >>1 ??
 		peak_log2_calculate_q31(avg_sample, &x_peak_log2, 0U);
 		rms_log2_calculate_q31(avg_sample, &x_rms_log2, 0U);
 

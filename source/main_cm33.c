@@ -109,18 +109,18 @@ cs42448_config_t cs42448Config = {
     .slaveAddress = CS42448_I2C_ADDR,
 };
 
-pq_config_t pq_config = {
-	.inputAFormat = ((uint32_t)(-31) << 8U) | ((uint32_t)kPQ_32Bit << 4U) | (uint32_t)kPQ_Float,
-	.inputAPrescale = (int8_t)0,
-	.inputBFormat = ((uint32_t)(0) << 8U) | ((uint32_t)kPQ_32Bit << 4U) | (uint32_t)kPQ_Float,
-	.inputBPrescale = (int8_t)0,
-	.outputFormat = ((uint32_t)(-31) << 8U) | ((uint32_t)kPQ_32Bit << 4U) | (uint32_t)kPQ_Float,
-	.outputPrescale = (int8_t)0,
-	.tmpFormat = ((uint32_t)(0) << 8U) | ((uint32_t)kPQ_Float << 4U) | (uint32_t)kPQ_Float,
-	.tmpPrescale = (int8_t)0,
-	.machineFormat = kPQ_Float,
-	.tmpBase = 0xE0000000U,
-};
+//pq_config_t pq_config = {
+//	.inputAFormat = ((uint32_t)(-31) << 8U) | ((uint32_t)kPQ_32Bit << 4U) | (uint32_t)kPQ_Float,
+//	.inputAPrescale = (int8_t)0,
+//	.inputBFormat = ((uint32_t)(0) << 8U) | ((uint32_t)kPQ_32Bit << 4U) | (uint32_t)kPQ_Float,
+//	.inputBPrescale = (int8_t)0,
+//	.outputFormat = ((uint32_t)(-31) << 8U) | ((uint32_t)kPQ_32Bit << 4U) | (uint32_t)kPQ_Float,
+//	.outputPrescale = (int8_t)0,
+//	.tmpFormat = ((uint32_t)(0) << 8U) | ((uint32_t)kPQ_Float << 4U) | (uint32_t)kPQ_Float,
+//	.tmpPrescale = (int8_t)0,
+//	.machineFormat = kPQ_Float,
+//	.tmpBase = 0xE0000000U,
+//};
 
 codec_config_t boardCodecConfig = {.codecDevType = kCODEC_CS42448, .codecDevConfig = &cs42448Config};
 
@@ -355,13 +355,14 @@ static void RxCallback(I2S_Type *base, i2s_dma_handle_t *handle, status_t comple
 		#endif
 
 		#ifdef Q31_USED
-		fir_process_batch((q31_t *)src_buffer_q31_1, (q31_t *)dst_buffer_q31_1);
-//		iir_process_batch((q31_t *)src_buffer_q31_1, (q31_t *)dst_buffer_q31_1);
-//		drc_full_stereo_balanced_q31((q31_t *)src_buffer_q31_1, (q31_t *)dst_buffer_q31_1, BUFFER_SIZE, (q31_t *)x_peak_log_q31_1);
+//		fir_process_batch((q31_t *)src_buffer_q31_1, (q31_t *)dst_buffer_q31_1);
+//		iir_df1_process_batch((q31_t *)src_buffer_q31_1, (q31_t *)dst_buffer_q31_1);
+		drc_full_stereo_balanced_q31((q31_t *)src_buffer_q31_1, (q31_t *)dst_buffer_q31_1, (q31_t *)x_peak_log_q31_1);
 		#else
-		fir_process_batch((float32_t *)src_buffer_f32_1, (float32_t *)dst_buffer_f32_1);
-//		iir_process_batch((float32_t *)src_buffer_f32_1, (float32_t *)dst_buffer_f32_1);
-//		drc_full_stereo_balanced_f32((float32_t *)src_buffer_f32_1, (float32_t *)dst_buffer_f32_1, BUFFER_SIZE, (float32_t *)x_peak_log_f32_1);
+//		fir_process_batch((float32_t *)src_buffer_f32_1, (float32_t *)dst_buffer_f32_1);
+//		iir_df1_process_batch((float32_t *)src_buffer_f32_1, (float32_t *)dst_buffer_f32_1);
+		iir_df2T_process_batch((float32_t *)src_buffer_f32_1, (float32_t *)dst_buffer_f32_1);
+//		drc_full_stereo_balanced_f32((float32_t *)src_buffer_f32_1, (float32_t *)dst_buffer_f32_1, (float32_t *)x_peak_log_f32_1);
 		#endif
 
 		#ifndef Q31_USED
@@ -395,13 +396,14 @@ static void RxCallback(I2S_Type *base, i2s_dma_handle_t *handle, status_t comple
 		#endif
 
 		#ifndef Q31_USED
-		fir_process_batch((float32_t *)src_buffer_f32_2, (float32_t *)dst_buffer_f32_2);
-//		iir_process_batch((float32_t *)src_buffer_f32_2, (float32_t *)dst_buffer_f32_2);
-//		drc_full_stereo_balanced_f32((float32_t *)src_buffer_f32_2, (float32_t *)dst_buffer_f32_2, BUFFER_SIZE, (float32_t *)x_peak_log_f32_2);
+//		fir_process_batch((float32_t *)src_buffer_f32_2, (float32_t *)dst_buffer_f32_2);
+//		iir_df1_process_batch((float32_t *)src_buffer_f32_2, (float32_t *)dst_buffer_f32_2);
+		iir_df2T_process_batch((float32_t *)src_buffer_f32_2, (float32_t *)dst_buffer_f32_2);
+//		drc_full_stereo_balanced_f32((float32_t *)src_buffer_f32_2, (float32_t *)dst_buffer_f32_2, (float32_t *)x_peak_log_f32_2);
 		#else
-		fir_process_batch((q31_t *)src_buffer_q31_2, (q31_t *)dst_buffer_q31_2);
-//		iir_process_batch((q31_t *)src_buffer_q31_2, (q31_t *)dst_buffer_q31_2);
-//		drc_full_stereo_balanced_q31((q31_t *)src_buffer_q31_2, (q31_t *)dst_buffer_q31_2, BUFFER_SIZE, (q31_t *)x_peak_log_q31_2);
+//		fir_process_batch((q31_t *)src_buffer_q31_2, (q31_t *)dst_buffer_q31_2);
+//		iir_df1_process_batch((q31_t *)src_buffer_q31_2, (q31_t *)dst_buffer_q31_2);
+		drc_full_stereo_balanced_q31((q31_t *)src_buffer_q31_2, (q31_t *)dst_buffer_q31_2, (q31_t *)x_peak_log_q31_2);
 		#endif
 
 		#ifndef Q31_USED
@@ -845,9 +847,14 @@ int main(void)
 	#ifdef HIFI4_USED
     init_hifi4();
 	#else
-    init_fir_filters();
+    init_fir_filter();
+
 	#ifndef PQ_USED
-    init_iir_filters();
+    init_iir_df1_filter();
+	#endif
+
+	#ifndef Q31_USED
+    init_iir_df2T_filter();
 	#endif
 	#endif
 

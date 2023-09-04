@@ -58,16 +58,26 @@
  * Variables
  ******************************************************************************/
 
+/*!
+ * Limiter:
+ * 	- peak:			t_AT = {0.02 ... 10.24 ms}. t_RT = {1 ... 5000 ms}
+ * 	- ctrl factor:	t_AT = {0.02 ... 10.24 ms}. t_RT = {1 ... 5000 ms}
+ * Compressor/Expander/Noise Gate:
+ * 	- RMS:			t_AT = {5 ms}. t_RT = {130 ms}
+ * 	- ctrl factor:	t_AT = {0.16 ... 2600 ms}. t_RT = {1 ... 5000 ms}
+ * 	- :
+ */
+
 /* attack time */
-#define t_at_ms 		1.0f
+#define t_at_ms 		0.05f
 /* attack time ctrl_factor */
 #define t_at_cf_ms 		0.1f
 /* release time */
-#define t_re_ms 		50.0f
+#define t_re_ms 		1.0f
 /* release time ctrl_factor */
 #define t_re_cf_ms 		5.0f
 /* averaging time */
-#define t_tav_ms 		20.0f
+#define t_tav_ms 		0.5f
 /* sampling frequency in Hz*/
 #define fs_hz 			48000.0f
 

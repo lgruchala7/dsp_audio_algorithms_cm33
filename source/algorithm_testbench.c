@@ -229,7 +229,7 @@ void test_cmsis_dsp_f32(float32_t * src_arr, float32_t * dst_arr, uint32_t arr_l
 	input_arr = &src_arr[0];
 	output_arr = &dst_arr[0];
 	/* Call FIR init function to initialize the instance structure. */
-	arm_fir_init_f32(&fir_instance, FIR_COEFF_COUNT, (float32_t *)&fir_filter_coeff_f32[0], &fir_state[0], FIR_BLOCK_SIZE);
+	arm_fir_init_f32(&fir_instance, FIR_COEFF_COUNT, (float32_t *)&fir_coeff_f32[0], &fir_state[0], FIR_BLOCK_SIZE);
 
 //	print_buffer_data_f32(src_arr, arr_size);
 
