@@ -21,7 +21,7 @@
  ******************************************************************************/
 #define Q31_USED
 //#define HIFI4_USED
-//#define PQ_USED
+#define PQ_USED
 
 #define APP_MU            		MUA
 #define APP_SEMA42          	SEMA42
@@ -34,9 +34,18 @@
 #define CHN_MU_REG_NUM 			0U
 #define PROC_NUM				1U
 /* Receive/transmit buffer size */
-#define BUFFER_SIZE				160
+#define BUFFER_SIZE				512
 
 #define IS_IN_RANGE_INCL(arg, low, up)	(((arg) >= (low) && (arg) <= (up)) ? true : false)
+
+/*******************************************************************************
+ * Type definitions
+ ******************************************************************************/
+enum {
+	CHANNEL_LEFT,
+	CHANNEL_RIGHT,
+	CHANNEL_CNT,
+};
 
 /*******************************************************************************
  * Exported variables

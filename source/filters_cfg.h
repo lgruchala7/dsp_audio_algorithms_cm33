@@ -31,11 +31,11 @@
 void init_fir_filters(void);
 void init_iir_filters(void);
 #ifndef Q31_USED
-void fir_process_batch(float32_t * src_buffer, float32_t * dst_buffer, size_t buffer_size);
-void iir_process_batch(float32_t * src_buffer, float32_t * dst_buffer, size_t buffer_size);
+void fir_process_batch(float32_t * src_buffer, float32_t * dst_buffer);
+void iir_process_batch(float32_t * src_buffer, float32_t * dst_buffer);
 #else
-void fir_process_batch(q31_t * src_buffer, q31_t * dst_buffer, size_t buffer_size);
-void iir_process_batch(q31_t * src_buffer, q31_t * dst_buffer, size_t buffer_size);
+void fir_process_batch(q31_t * src_buffer, q31_t * dst_buffer);
+void iir_process_batch(q31_t * src_buffer, q31_t * dst_buffer);
 #endif
 
 /*******************************************************************************

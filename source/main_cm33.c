@@ -64,6 +64,13 @@
 #define GPIO_DEBUG_PIN_TX			28U
 #define GPIO_DEBUG_PIN_RX			27U
 
+#define PQ_SET_Q31_CONFIG                                                                               \
+    POWERQUAD->OUTFORMAT = ((uint32_t)(-31) << 8U) | ((uint32_t)kPQ_32Bit << 4U) | (uint32_t)kPQ_Float; \
+    POWERQUAD->INAFORMAT = ((uint32_t)(0) << 8U) | ((uint32_t)kPQ_32Bit << 4U) | (uint32_t)kPQ_Float;   \
+    POWERQUAD->INBFORMAT = ((uint32_t)(0) << 8U) | ((uint32_t)kPQ_32Bit << 4U) | (uint32_t)kPQ_Float;   \
+    POWERQUAD->TMPFORMAT = ((uint32_t)(0) << 8U) | ((uint32_t)kPQ_Float << 4U) | (uint32_t)kPQ_Float;   \
+    POWERQUAD->TMPBASE   = 0xE0000000U
+
 /*******************************************************************************
  * Type definitions
  ******************************************************************************/
@@ -102,6 +109,19 @@ cs42448_config_t cs42448Config = {
     .slaveAddress = CS42448_I2C_ADDR,
 };
 
+pq_config_t pq_config = {
+	.inputAFormat = ((uint32_t)(-31) << 8U) | ((uint32_t)kPQ_32Bit << 4U) | (uint32_t)kPQ_Float,
+	.inputAPrescale = (int8_t)0,
+	.inputBFormat = ((uint32_t)(0) << 8U) | ((uint32_t)kPQ_32Bit << 4U) | (uint32_t)kPQ_Float,
+	.inputBPrescale = (int8_t)0,
+	.outputFormat = ((uint32_t)(-31) << 8U) | ((uint32_t)kPQ_32Bit << 4U) | (uint32_t)kPQ_Float,
+	.outputPrescale = (int8_t)0,
+	.tmpFormat = ((uint32_t)(0) << 8U) | ((uint32_t)kPQ_Float << 4U) | (uint32_t)kPQ_Float,
+	.tmpPrescale = (int8_t)0,
+	.machineFormat = kPQ_Float,
+	.tmpBase = 0xE0000000U,
+};
+
 codec_config_t boardCodecConfig = {.codecDevType = kCODEC_CS42448, .codecDevConfig = &cs42448Config};
 
 static dma_descriptor_t txDmaDescriptors[DMA_DESCRIPTOR_NUM] __attribute__((aligned(FSL_FEATURE_DMA_LINK_DESCRIPTOR_ALIGN_SIZE)));
@@ -116,9 +136,14 @@ volatile int32_t dst_buffer_32_2[BUFFER_SIZE] __attribute__((aligned(4)));
 volatile float32_t * src_buffer_f32_1 = NULL;
 volatile float32_t * src_buffer_f32_2 = NULL;
 #else
+#ifdef PQ_USED
 volatile float32_t src_buffer_f32_1[BUFFER_SIZE] __attribute__((aligned(4)));
 volatile float32_t src_buffer_f32_2[BUFFER_SIZE] __attribute__((aligned(4)));
-#endif/* HIFI4_USED */
+#else
+volatile float32_t src_buffer_f32_1[BUFFER_SIZE] __attribute__((aligned(4)));
+volatile float32_t src_buffer_f32_2[BUFFER_SIZE] __attribute__((aligned(4)));
+#endif /* PQ_USED */
+#endif /* HIFI4_USED */
 #ifdef HIFI4_USED
 volatile float32_t * dst_buffer_f32_1 = NULL;
 volatile float32_t * dst_buffer_f32_2 = NULL;
@@ -314,69 +339,84 @@ static void RxCallback(I2S_Type *base, i2s_dma_handle_t *handle, status_t comple
 
 	if (!is_intA)
 	{
+		#ifndef Q31_USED
 		for (int i = 0, j = 0, k = (BUFFER_SIZE/2); i < BUFFER_SIZE; i += 2, ++j, ++k)
 		{
 			src_buffer_f32_1[j] = (float32_t)src_buffer_32_1[i];
 			src_buffer_f32_1[k] = (float32_t)src_buffer_32_1[i+1];
 		}
-		#ifdef Q31_USED
-		arm_scale_f32((float32_t *)src_buffer_f32_1, scale_down_factor, (float32_t *)src_buffer_f32_1, BUFFER_SIZE);
-		arm_float_to_q31((float32_t *)src_buffer_f32_1, (q31_t *)src_buffer_q31_1, BUFFER_SIZE);
+		#else
+		for (int i = 0, j = 0, k = (BUFFER_SIZE/2); i < BUFFER_SIZE; i += 2, ++j, ++k)
+		{
+			src_buffer_q31_1[j] = (q31_t)src_buffer_32_1[i];
+			src_buffer_q31_1[k] = (q31_t)src_buffer_32_1[i+1];
+		}
+
 		#endif
 
 		#ifdef Q31_USED
-		iir_process_batch((q31_t *)src_buffer_q31_1, (q31_t *)dst_buffer_q31_1, BUFFER_SIZE);
+		fir_process_batch((q31_t *)src_buffer_q31_1, (q31_t *)dst_buffer_q31_1);
+//		iir_process_batch((q31_t *)src_buffer_q31_1, (q31_t *)dst_buffer_q31_1);
 //		drc_full_stereo_balanced_q31((q31_t *)src_buffer_q31_1, (q31_t *)dst_buffer_q31_1, BUFFER_SIZE, (q31_t *)x_peak_log_q31_1);
 		#else
-		iir_process_batch((float32_t *)src_buffer_f32_1, (float32_t *)dst_buffer_f32_1, BUFFER_SIZE);
+		fir_process_batch((float32_t *)src_buffer_f32_1, (float32_t *)dst_buffer_f32_1);
+//		iir_process_batch((float32_t *)src_buffer_f32_1, (float32_t *)dst_buffer_f32_1);
 //		drc_full_stereo_balanced_f32((float32_t *)src_buffer_f32_1, (float32_t *)dst_buffer_f32_1, BUFFER_SIZE, (float32_t *)x_peak_log_f32_1);
 		#endif
 
-		#ifdef Q31_USED
-		arm_q31_to_float((q31_t *)dst_buffer_q31_1, (float32_t *)dst_buffer_f32_1, BUFFER_SIZE);
-		arm_scale_f32((float32_t *)dst_buffer_f32_1, scale_up_factor, (float32_t *)dst_buffer_f32_1, BUFFER_SIZE);
-		arm_q31_to_float((q31_t *)x_peak_log_q31_1, (float32_t *)x_peak_log_f32_1, BUFFER_SIZE); //*
-		arm_scale_f32((float32_t *)x_peak_log_f32_1, scale_up_factor, (float32_t *)x_peak_log_f32_1, BUFFER_SIZE);//*
-		#endif
-
+		#ifndef Q31_USED
 		for (int i = 0, j = 0, k = (BUFFER_SIZE/2); i < BUFFER_SIZE; i += 2, ++j, ++k)
 		{
 			dst_buffer_32_1[i] = (int32_t)dst_buffer_f32_1[j];
 			dst_buffer_32_1[i+1] = (int32_t)dst_buffer_f32_1[k];
 		}
+		#else
+		for (int i = 0, j = 0, k = (BUFFER_SIZE/2); i < BUFFER_SIZE; i += 2, ++j, ++k)
+		{
+			dst_buffer_32_1[i] = (int32_t)dst_buffer_q31_1[j];
+			dst_buffer_32_1[i+1] = (int32_t)dst_buffer_q31_1[k];
+		}
+		#endif
 	}
 	else
 	{
+		#ifndef Q31_USED
 		for (int i = 0, j = 0, k = (BUFFER_SIZE/2); i < BUFFER_SIZE; i += 2, ++j, ++k)
 		{
 			src_buffer_f32_2[j] = (float32_t)src_buffer_32_2[i];
 			src_buffer_f32_2[k] = (float32_t)src_buffer_32_2[i+1];
 		}
-		#ifdef Q31_USED
-		arm_scale_f32((float32_t *)src_buffer_f32_2, scale_down_factor, (float32_t *)src_buffer_f32_2, BUFFER_SIZE);
-		arm_float_to_q31((float32_t *)src_buffer_f32_2, (q31_t *)src_buffer_q31_2, BUFFER_SIZE);
+		#else
+		for (int i = 0, j = 0, k = (BUFFER_SIZE/2); i < BUFFER_SIZE; i += 2, ++j, ++k)
+		{
+			src_buffer_q31_2[j] = (q31_t)src_buffer_32_2[i];
+			src_buffer_q31_2[k] = (q31_t)src_buffer_32_2[i+1];
+		}
 		#endif
 
 		#ifndef Q31_USED
-		iir_process_batch((float32_t *)src_buffer_f32_2, (float32_t *)dst_buffer_f32_2, BUFFER_SIZE);
+		fir_process_batch((float32_t *)src_buffer_f32_2, (float32_t *)dst_buffer_f32_2);
+//		iir_process_batch((float32_t *)src_buffer_f32_2, (float32_t *)dst_buffer_f32_2);
 //		drc_full_stereo_balanced_f32((float32_t *)src_buffer_f32_2, (float32_t *)dst_buffer_f32_2, BUFFER_SIZE, (float32_t *)x_peak_log_f32_2);
 		#else
-		iir_process_batch((q31_t *)src_buffer_q31_2, (q31_t *)dst_buffer_q31_2, BUFFER_SIZE);
+		fir_process_batch((q31_t *)src_buffer_q31_2, (q31_t *)dst_buffer_q31_2);
+//		iir_process_batch((q31_t *)src_buffer_q31_2, (q31_t *)dst_buffer_q31_2);
 //		drc_full_stereo_balanced_q31((q31_t *)src_buffer_q31_2, (q31_t *)dst_buffer_q31_2, BUFFER_SIZE, (q31_t *)x_peak_log_q31_2);
 		#endif
 
-		#ifdef Q31_USED
-		arm_q31_to_float((q31_t *)dst_buffer_q31_2, (float32_t *)dst_buffer_f32_2, BUFFER_SIZE);
-		arm_scale_f32((float32_t *)dst_buffer_f32_2, scale_up_factor, (float32_t *)dst_buffer_f32_2, BUFFER_SIZE);
-		arm_q31_to_float((q31_t *)x_peak_log_q31_2, (float32_t *)x_peak_log_f32_2, BUFFER_SIZE); //*
-		arm_scale_f32((float32_t *)x_peak_log_f32_2, scale_up_factor, (float32_t *)x_peak_log_f32_2, BUFFER_SIZE);//*
-		#endif
-
+		#ifndef Q31_USED
 		for (int i = 0, j = 0, k = (BUFFER_SIZE/2); i < BUFFER_SIZE; i += 2, ++j, ++k)
 		{
 			dst_buffer_32_2[i] = (int32_t)dst_buffer_f32_2[j];
 			dst_buffer_32_2[i+1] = (int32_t)dst_buffer_f32_2[k];
 		}
+		#else
+		for (int i = 0, j = 0, k = (BUFFER_SIZE/2); i < BUFFER_SIZE; i += 2, ++j, ++k)
+		{
+			dst_buffer_32_2[i] = (int32_t)dst_buffer_q31_2[j];
+			dst_buffer_32_2[i+1] = (int32_t)dst_buffer_q31_2[k];
+		}
+		#endif
 	}
 
 	#if DEBUG == 1
@@ -755,10 +795,17 @@ int main(void)
 	#ifdef PQ_USED
     /* Power up PQ RAM. */
     SYSCTL0->PDRUNCFG1_CLR = SYSCTL0_PDRUNCFG1_PQ_SRAM_APD_MASK | SYSCTL0_PDRUNCFG1_PQ_SRAM_PPD_MASK;
-
     /* Apply power setting. */
     POWER_ApplyPD();
+    /* Initialize POWERQUAD. */
     PQ_Init(POWERQUAD);
+
+	#ifdef Q31_USED
+    /* Set PQ config to Q31 format */
+    PQ_SET_Q31_CONFIG;
+	#else
+    PQ_SetFormat(POWERQUAD, kPQ_CP_FIR, kPQ_Float);
+	#endif
 	#endif
 
     BOARD_InitBootPins();
@@ -794,13 +841,14 @@ int main(void)
     MSDK_EnableCpuCycleCounter();
 
     calculate_coefficients();
-//    check_coefficients();
 
 	#ifdef HIFI4_USED
     init_hifi4();
 	#else
     init_fir_filters();
+	#ifndef PQ_USED
     init_iir_filters();
+	#endif
 	#endif
 
     start_digital_loopback();

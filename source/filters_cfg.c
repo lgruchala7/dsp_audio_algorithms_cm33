@@ -8,12 +8,20 @@
  * Includes
  ******************************************************************************/
 #include "filters_cfg.h"
-
+#include "fsl_powerquad.h"
 /*******************************************************************************
  * Variables
  ******************************************************************************/
 static uint32_t fir_num_blocks = (BUFFER_SIZE / FIR_BLOCK_SIZE / 2);
 static uint32_t iir_num_blocks = (BUFFER_SIZE / IIR_BLOCK_SIZE / 2);
+
+#ifndef PQ_USED
+static float32_t src_state_buffer[BUFFER_SIZE +  2 * (FIR_COEFF_COUNT - 1)];
+static float32_t dst_state_buffer[BUFFER_SIZE +  2 * (FIR_COEFF_COUNT - 1)];
+#else
+static q31_t src_state_buffer[BUFFER_SIZE +  2 * (FIR_COEFF_COUNT - 1)];
+static q31_t dst_state_buffer[BUFFER_SIZE +  2 * (FIR_COEFF_COUNT - 1)];
+#endif
 
 const float32_t fir_filter_coeff_f32[FIR_COEFF_COUNT] = {
 	/* cutoff 6kHz, order 256 */
@@ -126,6 +134,7 @@ void init_fir_filters(void)
 	#endif
 }
 
+#ifndef PQ_USED
 void init_iir_filters(void)
 {
 	#ifndef Q31_USED
@@ -137,37 +146,119 @@ void init_iir_filters(void)
 	arm_biquad_cascade_df1_init_q31(&iir_instance_q31_2, IIR_SOS, (q31_t *)iir_filter_coeff_q31, iir_state_q31_2, IIR_Q31_POSTSHIFT);
 	#endif
 }
+#endif
 
 #ifndef Q31_USED
-void fir_process_batch(float32_t * src_buffer, float32_t * dst_buffer, size_t buffer_size)
+void fir_process_batch(float32_t * src_buffer, float32_t * dst_buffer)
 {
+	#ifndef PQ_USED
 	for (uint32_t j = 0; j < fir_num_blocks; ++j)
 	{
 		arm_fir_f32(&fir_instance_f32_1, &src_buffer[0] + (j * FIR_BLOCK_SIZE), &dst_buffer[0] + (j * FIR_BLOCK_SIZE), FIR_BLOCK_SIZE);
-		arm_fir_f32(&fir_instance_f32_2, &src_buffer[buffer_size/2] + (j * FIR_BLOCK_SIZE), &dst_buffer[buffer_size/2] + (j * FIR_BLOCK_SIZE), FIR_BLOCK_SIZE);
 	}
+	for (uint32_t j = 0; j < fir_num_blocks; ++j)
+	{
+		arm_fir_f32(&fir_instance_f32_2, &src_buffer[BUFFER_SIZE/2] + (j * FIR_BLOCK_SIZE), &dst_buffer[BUFFER_SIZE/2] + (j * FIR_BLOCK_SIZE), FIR_BLOCK_SIZE);
+	}
+	#else
+	const static int old_val_idx[CHANNEL_CNT] = {0, (FIR_COEFF_COUNT-1) + (BUFFER_SIZE/2)};
+	const static int new_val_idx[CHANNEL_CNT] = {(FIR_COEFF_COUNT-1), ((2*(FIR_COEFF_COUNT-1)) + (BUFFER_SIZE/2))};
+	static bool is_first_call = true;
+	int offset;
+
+	/* copy the new samples to the the src_state buffer */
+	arm_copy_f32(&src_buffer[0], &src_state_buffer[new_val_idx[CHANNEL_LEFT]], (BUFFER_SIZE/2));
+	arm_copy_f32(&src_buffer[BUFFER_SIZE/2], &src_state_buffer[new_val_idx[CHANNEL_RIGHT]], (BUFFER_SIZE/2));
+
+	if (is_first_call)
+	{
+		PQ_FIR(POWERQUAD, &src_state_buffer[old_val_idx[CHANNEL_CNT]], (int32_t)FIR_BLOCK_SIZE, &fir_instance_f32_1.pState[1], FIR_COEFF_COUNT, &dst_state_buffer[old_val_idx[CHANNEL_CNT]], PQ_FIR_FIR);
+		PQ_WaitDone(POWERQUAD);
+		is_first_call = false;
+	}
+	for (uint32_t i = 0; i < fir_num_blocks; ++i)
+	{
+		offset = i * FIR_BLOCK_SIZE + new_val_idx[CHANNEL_LEFT];
+		PQ_FIRIncrement(POWERQUAD, (int32_t)FIR_BLOCK_SIZE, FIR_COEFF_COUNT, offset);
+		PQ_WaitDone(POWERQUAD);
+	}
+
+	for (uint32_t j = 0; j < fir_num_blocks; ++j)
+	{
+		offset = j * FIR_BLOCK_SIZE + new_val_idx[CHANNEL_RIGHT];
+		PQ_FIRIncrement(POWERQUAD, FIR_BLOCK_SIZE, FIR_COEFF_COUNT, offset);
+		PQ_WaitDone(POWERQUAD);
+	}
+
+	/* copy the last numTaps - 1 samples to the state buffer */
+	arm_copy_f32(&dst_state_buffer[new_val_idx[CHANNEL_LEFT]], &dst_buffer[0], (BUFFER_SIZE/2));
+	arm_copy_f32(&dst_state_buffer[new_val_idx[CHANNEL_RIGHT]], &dst_buffer[BUFFER_SIZE/2], (BUFFER_SIZE/2));
+
+	/* copy the last numTaps - 1 samples to the src_state buffer */
+	arm_copy_f32(&src_state_buffer[new_val_idx[CHANNEL_LEFT]], &src_state_buffer[old_val_idx[CHANNEL_LEFT]], (FIR_COEFF_COUNT-1));
+	arm_copy_f32(&src_state_buffer[new_val_idx[CHANNEL_RIGHT]], &src_state_buffer[old_val_idx[CHANNEL_RIGHT]], (FIR_COEFF_COUNT-1));
+	#endif /* PQ_USED */
 }
 #else
-void fir_process_batch(q31_t * src_buffer, q31_t * dst_buffer, size_t buffer_size)
+void fir_process_batch(q31_t * src_buffer, q31_t * dst_buffer)
 {
+	#ifndef PQ_USED
 	for (uint32_t j = 0; j < fir_num_blocks; ++j)
 	{
 		arm_fir_q31(&fir_instance_q31_1, &src_buffer[0] + (j * FIR_BLOCK_SIZE), &dst_buffer[0] + (j * FIR_BLOCK_SIZE), FIR_BLOCK_SIZE);
-		arm_fir_q31(&fir_instance_q31_2, &src_buffer[BUFFER_SIZE/2] + (j * FIR_BLOCK_SIZE), &dst_buffer[buffer_size/2] + (j * FIR_BLOCK_SIZE), FIR_BLOCK_SIZE);
+		arm_fir_q31(&fir_instance_q31_2, &src_buffer[BUFFER_SIZE/2] + (j * FIR_BLOCK_SIZE), &dst_buffer[BUFFER_SIZE/2] + (j * FIR_BLOCK_SIZE), FIR_BLOCK_SIZE);
 	}
+	#else
+	const static int old_val_idx[CHANNEL_CNT] = {0, (FIR_COEFF_COUNT-1) + (BUFFER_SIZE/2)};
+	const static int new_val_idx[CHANNEL_CNT] = {(FIR_COEFF_COUNT-1), ((2*(FIR_COEFF_COUNT-1)) + (BUFFER_SIZE/2))};
+	static bool is_first_call = true;
+	int offset;
+
+	/* copy the new samples to the the src_state buffer */
+	arm_copy_q31(&src_buffer[0], &src_state_buffer[new_val_idx[CHANNEL_LEFT]], (BUFFER_SIZE/2));
+	arm_copy_q31(&src_buffer[BUFFER_SIZE/2], &src_state_buffer[new_val_idx[CHANNEL_RIGHT]], (BUFFER_SIZE/2));
+
+	if (is_first_call)
+	{
+		PQ_FIR(POWERQUAD, &src_state_buffer[old_val_idx[CHANNEL_CNT]], (int32_t)FIR_BLOCK_SIZE, &fir_instance_q31_1.pState[1], FIR_COEFF_COUNT, &dst_state_buffer[old_val_idx[CHANNEL_CNT]], PQ_FIR_FIR);
+		PQ_WaitDone(POWERQUAD);
+		is_first_call = false;
+	}
+	for (uint32_t i = 0; i < fir_num_blocks; ++i)
+	{
+		offset = i * FIR_BLOCK_SIZE + new_val_idx[CHANNEL_LEFT];
+		PQ_FIRIncrement(POWERQUAD, (int32_t)FIR_BLOCK_SIZE, FIR_COEFF_COUNT, offset);
+		PQ_WaitDone(POWERQUAD);
+	}
+
+	for (uint32_t j = 0; j < fir_num_blocks; ++j)
+	{
+		offset = j * FIR_BLOCK_SIZE + new_val_idx[CHANNEL_RIGHT];
+		PQ_FIRIncrement(POWERQUAD, FIR_BLOCK_SIZE, FIR_COEFF_COUNT, offset);
+		PQ_WaitDone(POWERQUAD);
+	}
+
+	/* copy the last numTaps - 1 samples to the state buffer */
+	arm_copy_q31(&dst_state_buffer[new_val_idx[CHANNEL_LEFT]], &dst_buffer[0], (BUFFER_SIZE/2));
+	arm_copy_q31(&dst_state_buffer[new_val_idx[CHANNEL_RIGHT]], &dst_buffer[BUFFER_SIZE/2], (BUFFER_SIZE/2));
+
+	/* copy the last numTaps - 1 samples to the src_state buffer */
+	arm_copy_q31(&src_state_buffer[new_val_idx[CHANNEL_LEFT]], &src_state_buffer[old_val_idx[CHANNEL_LEFT]], (FIR_COEFF_COUNT-1));
+	arm_copy_q31(&src_state_buffer[new_val_idx[CHANNEL_RIGHT]], &src_state_buffer[old_val_idx[CHANNEL_RIGHT]], (FIR_COEFF_COUNT-1));
+	#endif /* PQ_USED */
 }
 #endif
 
 #ifndef Q31_USED
-void iir_process_batch(float32_t * src_buffer, float32_t * dst_buffer, size_t buffer_size)
+void iir_process_batch(float32_t * src_buffer, float32_t * dst_buffer)
 {
-	arm_biquad_cascade_df1_f32(&iir_instance_f32_1, &src_buffer[0], &dst_buffer[0], buffer_size/2);
-	arm_biquad_cascade_df1_f32(&iir_instance_f32_2, &src_buffer[buffer_size/2], &dst_buffer[buffer_size/2], buffer_size/2);
+	arm_biquad_cascade_df1_f32(&iir_instance_f32_1, &src_buffer[0], &dst_buffer[0], BUFFER_SIZE/2);
+	arm_biquad_cascade_df1_f32(&iir_instance_f32_2, &src_buffer[BUFFER_SIZE/2], &dst_buffer[BUFFER_SIZE/2], BUFFER_SIZE/2);
 }
 #else
-void iir_process_batch(q31_t * src_buffer, q31_t * dst_buffer, size_t buffer_size)
+void iir_process_batch(q31_t * src_buffer, q31_t * dst_buffer)
 {
-	arm_biquad_cascade_df1_q31(&iir_instance_q31_1, &src_buffer[0], &dst_buffer[0], buffer_size/2);
-	arm_biquad_cascade_df1_q31(&iir_instance_q31_2, &src_buffer[buffer_size/2], &dst_buffer[buffer_size/2], buffer_size/2);
+	arm_biquad_cascade_df1_q31(&iir_instance_q31_1, &src_buffer[0], &dst_buffer[0], BUFFER_SIZE/2);
+	arm_biquad_cascade_df1_q31(&iir_instance_q31_2, &src_buffer[BUFFER_SIZE/2], &dst_buffer[BUFFER_SIZE/2], BUFFER_SIZE/2);
 }
 #endif
