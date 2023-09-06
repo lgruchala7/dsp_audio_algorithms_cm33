@@ -31,14 +31,17 @@
 void init_fir_filter(void);
 void init_iir_df1_filter(void);
 void init_iir_df2T_filter(void);
-#ifndef Q31_USED
+void init_iir_df2_filter(void);
+#if !(Q31_USED)
 void fir_process_batch(float32_t * src_buffer, float32_t * dst_buffer);
 void iir_df1_process_batch(float32_t * src_buffer, float32_t * dst_buffer);
 void iir_df2T_process_batch(float32_t * src_buffer, float32_t * dst_buffer);
+void iir_df2_process_batch(float32_t * src_buffer, float32_t * dst_buffer);
 #else
 void fir_process_batch(q31_t * src_buffer, q31_t * dst_buffer);
 void iir_df1_process_batch(q31_t * src_buffer, q31_t * dst_buffer);
 void iir_df2T_process_batch(q31_t * src_buffer, q31_t * dst_buffer);
+void iir_df2_process_batch(q31_t * src_buffer, q31_t * dst_buffer);
 #endif
 
 /*******************************************************************************
@@ -46,7 +49,7 @@ void iir_df2T_process_batch(q31_t * src_buffer, q31_t * dst_buffer);
  ******************************************************************************/
 extern const float32_t fir_coeff_f32[FIR_COEFF_COUNT];
 extern const float32_t iir_df1_coeff_f32[IIR_COEFF_COUNT];
-#ifndef Q31_USED
+#if !(Q31_USED)
 extern arm_fir_instance_f32 fir_instance_f32_1;
 extern arm_fir_instance_f32 fir_instance_f32_2;
 extern float32_t fir_state_f32_1[FIR_BLOCK_SIZE + FIR_COEFF_COUNT - 1];

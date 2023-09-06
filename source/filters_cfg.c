@@ -15,8 +15,8 @@
 static uint32_t fir_num_blocks = (BUFFER_SIZE / FIR_BLOCK_SIZE / 2);
 static uint32_t iir_num_blocks = (BUFFER_SIZE / IIR_BLOCK_SIZE / 2);
 
-#ifdef PQ_USED
-#ifndef Q31_USED
+#if PQ_USED
+#if !(Q31_USED)
 static float32_t src_state_buffer[BUFFER_SIZE +  2 * (FIR_COEFF_COUNT - 1)];
 static float32_t dst_state_buffer[BUFFER_SIZE +  2 * (FIR_COEFF_COUNT - 1)];
 #else
@@ -30,7 +30,8 @@ const float32_t fir_coeff_f32[FIR_COEFF_COUNT] = {
 	0.0f, -0.000142095463926298f, -0.000203598484145306f, -0.000146364768649777f, 0.0f, 0.000152796255334117f, 0.000221823870954137f, 0.000161487217690435f, 0.0f, -0.000172536476232354f, -0.000253111426525135f, -0.000186044545777425f, 0.0f, 0.000202113832835479f, 0.000298599184600296f, 0.000220848866463926f, 0.0f, -0.000242356566655504f, -0.000359470896364611f, -0.000266746554889788f, 0.0f, 0.000294131512141478f, 0.000436968307791359f, 0.000324627590413839f, 0.0f, -0.000358354884777625f, -0.000532407533612327f, -0.000395437973970450f, 0.0f, 0.000436006538883024f, 0.000647200648234585f, 0.000480196069766373f, 0.0f, -0.000528148674789083f, -0.000782883983192874f, -0.000580014004716558f, 0.0f, 0.000635950311052743f, 0.000941155138348767f, 0.000696125658073407f, 0.0f, -0.000760719312910043f, -0.00112392144914783f, -0.000829923342363559f, 0.0f, 0.000903944450630234f, 0.00133336371102959f, 0.000983006098849127f, 0.0f, -0.00106735095564239f, -0.00157202051065915f, -0.00115724373801470f, 0.0f, 0.00125297451462210f, 0.00184290081687561f, 0.00135486255918409f, 0.0f, -0.00146326086157541f, -0.00214963597346358f, -0.00157856142905363f, 0.0f, 0.00170120154169663f, 0.00249668762992459f, 0.00183167116649932f, 0.0f, -0.00197052178649341f, -0.00288963667437853f, -0.00211837696848963f, 0.0f, 0.00227594508079392f, 0.00333559205593175f, 0.00244403468771380f, 0.0f, -0.00262357330092913f, -0.00384378142477216f, -0.00281563037311102f, 0.0f, 0.00302144569694921f, 0.00442642515110156f, 0.00324246475256718f, 0.0f, -0.00348038307159067f, -0.00510006593656665f, -0.00373720242153848f, 0.0f, 0.00401530265745672f, 0.00588765744666140f, 0.00431753458898457f, 0.0f, -0.00464734140520535f, -0.00682197091934482f, -0.00500891946123627f, 0.0f, 0.00540743416951147f, 0.00795140479312829f, 0.00584931437171450f, 0.0f, -0.00634266063239365f, -0.00935043979531675f, -0.00689782244903868f, 0.0f, 0.00752823196298245f, 0.0111397418830013f, 0.00825163780957785f, 0.0f, -0.00909198266861255f, -0.0135281916709367f, -0.0100823536463049f, 0.0f, 0.0112697959941345f, 0.0169109477103547f, 0.0127235246748694f, 0.0f, -0.0145497050974079f, -0.0221356107387184f, -0.0169198775073432f, 0.0f, 0.0201303896832348f, 0.0314071709056526f, 0.0247410730777657f, 0.0f, -0.0319516492901427f, -0.0528127241883479f, -0.0448815117930890f, 0.0f, 0.0749686340967730f, 0.159142724192092f, 0.225155374452901f, 0.250119395289229f, 0.225155374452901f, 0.159142724192092f, 0.0749686340967730f, 0.0f, -0.0448815117930890f, -0.0528127241883479f, -0.0319516492901427f, 0.0f, 0.0247410730777657f, 0.0314071709056526f, 0.0201303896832348f, 0.0f, -0.0169198775073432f, -0.0221356107387184f, -0.0145497050974079f, 0.0f, 0.0127235246748694f, 0.0169109477103547f, 0.0112697959941345f, 0.0f, -0.0100823536463049f, -0.0135281916709367f, -0.00909198266861255f, 0.0f, 0.00825163780957785f, 0.0111397418830013f, 0.00752823196298245f, 0.0f, -0.00689782244903868f, -0.00935043979531675f, -0.00634266063239365f, 0.0f, 0.00584931437171450f, 0.00795140479312829f, 0.00540743416951147f, 0.0f, -0.00500891946123627f, -0.00682197091934482f, -0.00464734140520535f, 0.0f, 0.00431753458898457f, 0.00588765744666140f, 0.00401530265745672f, 0.0f, -0.00373720242153848f, -0.00510006593656665f, -0.00348038307159067f, 0.0f, 0.00324246475256718f, 0.00442642515110156f, 0.00302144569694921f, 0.0f, -0.00281563037311102f, -0.00384378142477216f, -0.00262357330092913f, 0.0f, 0.00244403468771380f, 0.00333559205593175f, 0.00227594508079392f, 0.0f, -0.00211837696848963f, -0.00288963667437853f, -0.00197052178649341f, 0.0f, 0.00183167116649932f, 0.00249668762992459f, 0.00170120154169663f, 0.0f, -0.00157856142905363f, -0.00214963597346358f, -0.00146326086157541f, 0.0f, 0.00135486255918409f, 0.00184290081687561f, 0.00125297451462210f, 0.0f, -0.00115724373801470f, -0.00157202051065915f, -0.00106735095564239f, 0.0f, 0.000983006098849127f, 0.00133336371102959f, 0.000903944450630234f, 0.0f, -0.000829923342363559f, -0.00112392144914783f, -0.000760719312910043f, 0.0f, 0.000696125658073407f, 0.000941155138348767f, 0.000635950311052743f, 0.0f, -0.000580014004716558f, -0.000782883983192874f, -0.000528148674789083f, 0.0f, 0.000480196069766373f, 0.000647200648234585f, 0.000436006538883024f, 0.0f, -0.000395437973970450f, -0.000532407533612327f, -0.000358354884777625f, 0.0f, 0.000324627590413839f, 0.000436968307791359f, 0.000294131512141478f, 0.0f, -0.000266746554889788f, -0.000359470896364611f, -0.000242356566655504f, 0.0f, 0.000220848866463926f, 0.000298599184600296f, 0.000202113832835479f, 0.0f, -0.000186044545777425f, -0.000253111426525135f, -0.000172536476232354f, 0.0f, 0.000161487217690435f, 0.000221823870954137f, 0.000152796255334117f, 0.0f, -0.000146364768649777f, -0.000203598484145306f, -0.000142095463926298f, 0.0f
 };
 const float32_t iir_df1_coeff_f32[IIR_COEFF_COUNT] = {
-	/* cutoff 10kHz, order 66 */
+	/* cutoff 10kHz, order 66
+	 * b0	b1	b2	a1	a2 */
 	0.035988055f,	0.07197611f,	0.035988055f,	0.416100782f,	-0.792953711f,
 	0.24593792f,	0.491875841f,	0.24593792f,	0.358093443f,	-0.543003515f,
 	0.292326008f,	0.584652016f,	0.292326008f,	0.316575117f,	-0.364103495f,
@@ -101,6 +102,8 @@ const float32_t iir_df1_coeff_f32[IIR_COEFF_COUNT] = {
 };
 
 const float32_t iir_df2T_coeff_f32[IIR_COEFF_COUNT] = {
+	/* cutoff 10kHz, order 66
+	 * b0	b1	b2	a1	a2  */
 	0.081151347f,	0.162302695f,	0.081151347f,	0.416100782f,	-0.792953711f,
 	0.177202897f,	0.354405794f,	0.177202897f,	0.358093443f,	-0.543003515f,
 	0.243742079f,	0.487484157f,	0.243742079f,	0.316575117f,	-0.364103495f,
@@ -136,12 +139,51 @@ const float32_t iir_df2T_coeff_f32[IIR_COEFF_COUNT] = {
 	0.359047384f,	0.718094768f,	0.359047384f,	0.434032986f,	-0.870222522f,
 };
 
-#ifndef Q31_USED
+const float32_t iir_df2_coeff_f32[IIR_COEFF_COUNT] = {
+	/* cutoff 10kHz, order 66
+	 * a1	a2	b0	b1	b2	*/
+	-0.416100782f,	0.792953711f,	0.035985196f,	0.071970392f,	0.035985196f,
+	-0.358093443f,	0.543003515f,	0.24593792f,	0.491875841f,	0.24593792f,
+	-0.316575117f,	0.364103495f,	0.292326008f,	0.584652016f,	0.292326008f,
+	-0.286635666f,	0.235096169f,	0.323231352f,	0.646462704f,	0.323231352f,
+	-0.265219174f,	0.142813768f,	0.341744243f,	0.683488487f,	0.341744243f,
+	-0.250389528f,	0.078913699f,	0.349087413f,	0.698174825f,	0.349087413f,
+	-0.240928402f,	0.038146263f,	0.342757509f,	0.685515018f,	0.342757509f,
+	-0.23611087f,	0.017387806f,	0.255047221f,	0.510094441f,	0.255047221f,
+	-0.235320385f,	0.01398165f,	0.196856394f,	0.393712788f,	0.196856394f,
+	-0.23796906f,	0.025394635f,	0.202708174f,	0.405416347f,	0.202708174f,
+	-0.24504296f,	0.055875655f,	0.212657948f,	0.425315897f,	0.212657948f,
+	-0.257070705f,	0.107702499f,	0.227492558f,	0.454985116f,	0.227492558f,
+	-0.275003464f,	0.184973696f,	0.24848634f,	0.49697268f,	0.24848634f,
+	-0.300381713f,	0.294327073f,	0.277649477f,	0.555298955f,	0.277649477f,
+	-0.335635454f,	0.446233364f,	0.318175645f,	0.63635129f,	0.318175645f,
+	-0.384625349f,	0.657327928f,	0.116557064f,	0.233114129f,	0.116557064f,
+	-0.453650093f,	0.954751477f,	0.108749869f,	0.217499739f,	0.108749869f,
+	-0.399681548f,	0.722204202f,	0.198213273f,	0.396426545f,	0.198213273f,
+	-0.34640137f,	0.492623058f,	0.262320034f,	0.524640069f,	0.262320034f,
+	-0.308148545f,	0.327793894f,	0.308360525f,	0.61672105f,	0.308360525f,
+	-0.280573359f,	0.208974044f,	0.340936401f,	0.681872801f,	0.340936401f,
+	-0.260951915f,	0.124426401f,	0.3629516f,		0.725903201f,	0.3629516f,
+	-0.247556479f,	0.066706258f,	0.376206256f,	0.752412511f,	0.376206256f,
+	-0.239308211f,	0.031164959f,	0.367310471f,	0.734620942f,	0.367310471f,
+	-0.23558349f,	0.015115356f,	0.202325709f,	0.404651417f,	0.202325709f,
+	-0.236904876f,	0.02080913f,	0.200883361f,	0.401766722f,	0.200883361f,
+	-0.242837043f,	0.046370487f,	0.209750263f,	0.419500527f,	0.209750263f,
+	-0.253555762f,	0.092556816f,	0.223266419f,	0.446532838f,	0.223266419f,
+	-0.269894712f,	0.162960388f,	0.242566376f,	0.485132752f,	0.242566376f,
+	-0.293225388f,	0.263490892f,	0.269444337f,	0.538888674f,	0.269444337f,
+	-0.325716703f,	0.403494051f,	0.306739667f,	0.613479334f,	0.306739667f,
+	-0.370801013f,	0.59775968f,	0.2281868f,		0.4563736f,		0.2281868f,
+	-0.434032986f,	0.870222522f,	0.39337002f,	0.786740039f,	0.39337002f,
+};
+
+#if !(Q31_USED)
 arm_fir_instance_f32 fir_instance_f32_1;
 arm_fir_instance_f32 fir_instance_f32_2;
 float32_t fir_state_f32_1[FIR_BLOCK_SIZE + FIR_COEFF_COUNT - 1];
 float32_t fir_state_f32_2[FIR_BLOCK_SIZE + FIR_COEFF_COUNT - 1];
 
+#if !(PQ_USED)
 arm_biquad_casd_df1_inst_f32 iir_df1_instance_f32_1;
 arm_biquad_casd_df1_inst_f32 iir_df1_instance_f32_2;
 float32_t iir_df1_state_f32_1[IIR_SOS * 4];
@@ -151,6 +193,12 @@ arm_biquad_cascade_df2T_instance_f32 iir_df2T_instance_f32_1;
 arm_biquad_cascade_df2T_instance_f32 iir_df2T_instance_f32_2;
 float32_t iir_df2T_state_f32_1[IIR_SOS * 2];
 float32_t iir_df2T_state_f32_2[IIR_SOS * 2];
+#else
+pq_biquad_cascade_df2_instance iir_df2_instance_f32_1;
+pq_biquad_cascade_df2_instance iir_df2_instance_f32_2;
+float32_t iir_df2_state_f32_1[IIR_SOS * 8];
+float32_t iir_df2_state_f32_2[IIR_SOS * 8];
+#endif
 #else
 arm_fir_instance_q31 fir_instance_q31_1;
 arm_fir_instance_q31 fir_instance_q31_2;
@@ -163,6 +211,12 @@ arm_biquad_casd_df1_inst_q31 iir_df1_instance_q31_2;
 q31_t iir_df1_state_q31_1[IIR_SOS * 4];
 q31_t iir_df1_state_q31_2[IIR_SOS * 4];
 q31_t iir_df1_coeff_q31[IIR_COEFF_COUNT];
+
+pq_biquad_cascade_df2_instance iir_df2_instance_q31_1;
+pq_biquad_cascade_df2_instance iir_df2_instance_q31_2;
+q31_t iir_df2_state_q31_1[IIR_SOS * 8];
+q31_t iir_df2_state_q31_2[IIR_SOS * 8];
+//q31_t iir_df2_coeff_q31[IIR_COEFF_COUNT];
 #endif
 
 /*******************************************************************************
@@ -170,7 +224,7 @@ q31_t iir_df1_coeff_q31[IIR_COEFF_COUNT];
  ******************************************************************************/
 void init_fir_filter(void)
 {
-	#ifndef Q31_USED
+	#if !(Q31_USED)
 	arm_fir_init_f32(&fir_instance_f32_1, FIR_COEFF_COUNT, (float32_t *)&fir_coeff_f32[0], &fir_state_f32_1[0], FIR_BLOCK_SIZE);
 	arm_fir_init_f32(&fir_instance_f32_2, FIR_COEFF_COUNT, (float32_t *)&fir_coeff_f32[0], &fir_state_f32_2[0], FIR_BLOCK_SIZE);
 	#else
@@ -180,10 +234,10 @@ void init_fir_filter(void)
 	#endif
 }
 
-#ifndef PQ_USED
+#if !(PQ_USED)
 void init_iir_df1_filter(void)
 {
-	#ifndef Q31_USED
+	#if !(Q31_USED)
 	arm_biquad_cascade_df1_init_f32(&iir_df1_instance_f32_1, IIR_SOS, (float32_t *)iir_df1_coeff_f32, iir_df1_state_f32_1);
 	arm_biquad_cascade_df1_init_f32(&iir_df1_instance_f32_2, IIR_SOS, (float32_t *)iir_df1_coeff_f32, iir_df1_state_f32_2);
 	#else
@@ -194,8 +248,8 @@ void init_iir_df1_filter(void)
 }
 #endif
 
-#ifndef Q31_USED
-#ifndef PQ_USED
+#if !(Q31_USED)
+#if !(PQ_USED)
 void init_iir_df2T_filter(void)
 {
 	arm_biquad_cascade_df2T_init_f32(&iir_df2T_instance_f32_1, IIR_SOS, (float32_t *)iir_df2T_coeff_f32, iir_df2T_state_f32_1);
@@ -204,10 +258,60 @@ void init_iir_df2T_filter(void)
 #endif
 #endif
 
-#ifndef Q31_USED
+#if !(Q31_USED)
+#if PQ_USED
+void init_iir_df2_filter(void)
+{
+	arm_fill_f32(0.0f, iir_df2_state_f32_1, IIR_SOS * 8);
+	for (int i = 0; i < IIR_SOS; ++i)
+	{
+		arm_copy_f32(&(iir_df2_coeff_f32[i * 5]), &(iir_df2_state_f32_1[(i * 8) + 2]), 5U);
+//		iir_df2_state_f32_1[(i * 8) + 2] = iir_df2_coeff_f32[(i * 5) + 0];
+//		iir_df2_state_f32_1[(i * 8) + 3] = iir_df2_coeff_f32[(i * 5) + 1];
+//		iir_df2_state_f32_1[(i * 8) + 4] = iir_df2_coeff_f32[(i * 5) + 2];
+//		iir_df2_state_f32_1[(i * 8) + 5] = iir_df2_coeff_f32[(i * 5) + 3];
+//		iir_df2_state_f32_1[(i * 8) + 6] = iir_df2_coeff_f32[(i * 5) + 4];
+	}
+	PQ_BiquadCascadeDf2Init(&iir_df2_instance_f32_1, IIR_SOS, (pq_biquad_state_t *)iir_df2_state_f32_1);
+
+	arm_fill_f32(0.0f, iir_df2_state_f32_2, IIR_SOS * 8);
+	for (int i = 0; i < IIR_SOS; ++i)
+	{
+		arm_copy_f32(&(iir_df2_coeff_f32[i * 5]), &(iir_df2_state_f32_2[(i * 8) + 2]), 5U);
+//		iir_df2_state_f32_2[(i * 8) + 2] = iir_df2_coeff_f32[(i * 5) + 0];
+//		iir_df2_state_f32_2[(i * 8) + 3] = iir_df2_coeff_f32[(i * 5) + 1];
+//		iir_df2_state_f32_2[(i * 8) + 4] = iir_df2_coeff_f32[(i * 5) + 2];
+//		iir_df2_state_f32_2[(i * 8) + 5] = iir_df2_coeff_f32[(i * 5) + 3];
+//		iir_df2_state_f32_2[(i * 8) + 6] = iir_df2_coeff_f32[(i * 5) + 4];
+	}
+	PQ_BiquadCascadeDf2Init(&iir_df2_instance_f32_2, IIR_SOS, (pq_biquad_state_t *)iir_df2_state_f32_2);
+}
+#endif
+#else
+void init_iir_df2_filter(void)
+{
+//	arm_float_to_q31(iir_df2_coeff_f32, iir_df2_coeff_q31, IIR_COEFF_COUNT); //???
+
+	arm_fill_q31(Q31_ZERO, iir_df2_state_q31_1, IIR_SOS * 8);
+	for (int i = 0; i < IIR_SOS; ++i)
+	{
+		arm_copy_f32(&(iir_df2_coeff_f32[i * 5]), (float32_t *)&(iir_df2_state_q31_1[(i * 8) + 2]), 5U);
+	}
+	PQ_BiquadCascadeDf2Init(&iir_df2_instance_q31_1, IIR_SOS, (pq_biquad_state_t *)iir_df2_state_q31_1);
+
+	arm_fill_q31(Q31_ZERO, iir_df2_state_q31_2, IIR_SOS * 8);
+	for (int i = 0; i < IIR_SOS; ++i)
+	{
+		arm_copy_f32(&(iir_df2_coeff_f32[i * 5]), (float32_t *)&(iir_df2_state_q31_2[(i * 8) + 2]), 5U);
+	}
+	PQ_BiquadCascadeDf2Init(&iir_df2_instance_q31_2, IIR_SOS, (pq_biquad_state_t *)iir_df2_state_q31_2);
+}
+#endif
+
+#if !(Q31_USED)
 void fir_process_batch(float32_t * src_buffer, float32_t * dst_buffer)
 {
-	#ifndef PQ_USED
+	#if !(PQ_USED)
 	for (uint32_t j = 0; j < fir_num_blocks; ++j)
 	{
 		arm_fir_f32(&fir_instance_f32_1, &src_buffer[0] + (j * FIR_BLOCK_SIZE), &dst_buffer[0] + (j * FIR_BLOCK_SIZE), FIR_BLOCK_SIZE);
@@ -258,7 +362,7 @@ void fir_process_batch(float32_t * src_buffer, float32_t * dst_buffer)
 #else
 void fir_process_batch(q31_t * src_buffer, q31_t * dst_buffer)
 {
-	#ifndef PQ_USED
+	#if !(PQ_USED)
 	for (uint32_t j = 0; j < fir_num_blocks; ++j)
 	{
 		arm_fir_q31(&fir_instance_q31_1, &src_buffer[0] + (j * FIR_BLOCK_SIZE), &dst_buffer[0] + (j * FIR_BLOCK_SIZE), FIR_BLOCK_SIZE);
@@ -305,7 +409,8 @@ void fir_process_batch(q31_t * src_buffer, q31_t * dst_buffer)
 }
 #endif
 
-#ifndef Q31_USED
+#if !(PQ_USED)
+#if !(Q31_USED)
 void iir_df1_process_batch(float32_t * src_buffer, float32_t * dst_buffer)
 {
 	arm_biquad_cascade_df1_f32(&iir_df1_instance_f32_1, &src_buffer[0], &dst_buffer[0], BUFFER_SIZE/2);
@@ -318,13 +423,30 @@ void iir_df1_process_batch(q31_t * src_buffer, q31_t * dst_buffer)
 	arm_biquad_cascade_df1_q31(&iir_df1_instance_q31_2, &src_buffer[BUFFER_SIZE/2], &dst_buffer[BUFFER_SIZE/2], BUFFER_SIZE/2);
 }
 #endif
+#endif
 
-#ifndef Q31_USED
-#ifndef PQ_USED
+#if !(Q31_USED)
+#if !(PQ_USED)
 void iir_df2T_process_batch(float32_t * src_buffer, float32_t * dst_buffer)
 {
-	arm_biquad_cascade_df2T_f32(&iir_df2T_instance_f32_1, &src_buffer[0], &dst_buffer[0], BUFFER_SIZE/2);
-	arm_biquad_cascade_df2T_f32(&iir_df2T_instance_f32_2, &src_buffer[BUFFER_SIZE/2], &dst_buffer[BUFFER_SIZE/2], BUFFER_SIZE/2);
+	arm_biquad_cascade_df2_f32(&iir_df2T_instance_f32_1, &src_buffer[0], &dst_buffer[0], BUFFER_SIZE/2);
+	arm_biquad_cascade_df2_f32(&iir_df2T_instance_f32_2, &src_buffer[BUFFER_SIZE/2], &dst_buffer[BUFFER_SIZE/2], BUFFER_SIZE/2);
+}
+#endif
+#endif
+
+#if PQ_USED
+#if !(Q31_USED)
+void iir_df2_process_batch(float32_t * src_buffer, float32_t * dst_buffer)
+{
+	PQ_BiquadCascadeDf2F32(&iir_df2_instance_f32_1, &src_buffer[0], &dst_buffer[0], BUFFER_SIZE/2);
+	PQ_BiquadCascadeDf2F32(&iir_df2_instance_f32_2, &src_buffer[BUFFER_SIZE/2], &dst_buffer[BUFFER_SIZE/2], BUFFER_SIZE/2);
+}
+#else
+void iir_df2_process_batch(q31_t * src_buffer, q31_t * dst_buffer)
+{
+	PQ_BiquadCascadeDf2Fixed32(&iir_df2_instance_q31_1, &src_buffer[0], &dst_buffer[0], BUFFER_SIZE/2);
+	PQ_BiquadCascadeDf2Fixed32(&iir_df2_instance_q31_2, &src_buffer[BUFFER_SIZE/2], &dst_buffer[BUFFER_SIZE/2], BUFFER_SIZE/2);
 }
 #endif
 #endif

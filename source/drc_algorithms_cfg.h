@@ -18,11 +18,7 @@
  * Definitions
  ******************************************************************************/
 //#define _16bit
-#ifdef Q31_USED
-/* Q31 constants */
-#define Q31_ONE				(q31_t)0x7fffffff
-#define Q31_ONE_F32			(q31_t)0x7fffffff
-#define Q31_ZERO			(q31_t)0x00000000
+#if Q31_USED
 /* LUT constants */
 #define TABLE_SIZE      	4096
 #define SCALE_FACTOR	   	5
@@ -36,7 +32,7 @@
 #define LUT_MAX_EXP        	0.0f
 #define LUT_RANGE_EXP      	0x80000000
 #define LUT_RANGE_EXP_F32 	(LUT_MAX_EXP - LUT_MIN_EXP)
-#ifdef PQ_USED
+#if PQ_USED
 /* Q31 operations */
 #define Q31_MUL(x, y)							((__SSAT((((q63_t) (x) * (y)) >> 32), 31)) << 1U)
 #define Q31_ADD(x, y)							(__QADD((x), (y)))
@@ -81,7 +77,7 @@
 /* sampling frequency in Hz*/
 #define fs_hz 			48000.0f
 
-#ifndef Q31_USED
+#if !(Q31_USED)
 /* limiter slope */
 #define LS 				1.0f
 /* compressor slope */

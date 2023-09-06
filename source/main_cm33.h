@@ -19,9 +19,14 @@
 /*******************************************************************************
  * Definitions
  ******************************************************************************/
-#define Q31_USED
-//#define HIFI4_USED
-#define PQ_USED
+#define Q31_USED	1
+#define HIFI4_USED	0
+#define PQ_USED		1
+
+/* Q31 constants */
+#define Q31_ONE				(q31_t)0x7fffffff
+#define Q31_ONE_F32			(q31_t)0x7fffffff
+#define Q31_ZERO			(q31_t)0x00000000
 
 #define APP_MU            		MUA
 #define APP_SEMA42          	SEMA42

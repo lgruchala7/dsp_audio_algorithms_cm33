@@ -132,11 +132,11 @@ volatile int32_t src_buffer_32_2[BUFFER_SIZE] __attribute__((aligned(4)));
 volatile int32_t dst_buffer_32_1[BUFFER_SIZE] __attribute__((aligned(4)));
 volatile int32_t dst_buffer_32_2[BUFFER_SIZE] __attribute__((aligned(4)));
 
-#ifdef HIFI4_USED
+#if HIFI4_USED
 volatile float32_t * src_buffer_f32_1 = NULL;
 volatile float32_t * src_buffer_f32_2 = NULL;
 #else
-#ifdef PQ_USED
+#if PQ_USED
 volatile float32_t src_buffer_f32_1[BUFFER_SIZE] __attribute__((aligned(4)));
 volatile float32_t src_buffer_f32_2[BUFFER_SIZE] __attribute__((aligned(4)));
 #else
@@ -144,7 +144,7 @@ volatile float32_t src_buffer_f32_1[BUFFER_SIZE] __attribute__((aligned(4)));
 volatile float32_t src_buffer_f32_2[BUFFER_SIZE] __attribute__((aligned(4)));
 #endif /* PQ_USED */
 #endif /* HIFI4_USED */
-#ifdef HIFI4_USED
+#if HIFI4_USED
 volatile float32_t * dst_buffer_f32_1 = NULL;
 volatile float32_t * dst_buffer_f32_2 = NULL;
 #else
@@ -152,8 +152,8 @@ volatile float32_t dst_buffer_f32_1[BUFFER_SIZE] __attribute__((aligned(4)));
 volatile float32_t dst_buffer_f32_2[BUFFER_SIZE] __attribute__((aligned(4)));
 #endif/* HIFI4_USED */
 
-#ifdef Q31_USED
-#ifdef HIFI4_USED
+#if Q31_USED
+#if HIFI4_USED
 volatile q31_t * src_buffer_q31_1 = NULL;
 volatile q31_t * src_buffer_q31_2 = NULL;
 #else
@@ -166,7 +166,7 @@ volatile float32_t x_peak_log_f32_1[BUFFER_SIZE] = {0.0f};
 volatile float32_t x_peak_log_f32_2[BUFFER_SIZE] = {0.0f};
 //volatile float32_t x_peak_log_2_f32[BUFFER_SIZE] = {0.0f};
 #endif /* HIFI4_USED */
-#ifdef HIFI4_USED
+#if HIFI4_USED
 static volatile q31_t * dst_buffer_q31_1 = NULL;
 static volatile q31_t * dst_buffer_q31_2 = NULL;
 #else
@@ -193,7 +193,7 @@ static float test_arr[TEST_ARR_SIZE] = {0.0f};
 volatile int16_t src_test_arr_16[TEST_ARR_SIZE] = {0};
 volatile int16_t dst_test_arr_16[TEST_ARR_SIZE] = {0};
 float32_t src_test_arr_f32[TEST_ARR_SIZE] = {0.0f};
-#ifdef Q31_USED
+#if Q31_USED
 q31_t src_test_arr_q31[TEST_ARR_SIZE] = {(q31_t)0};
 volatile float32_t dst_test_arr_f32[TEST_ARR_SIZE] = {0.0f};
 volatile q31_t * dst_test_arr_q31 = NULL;
@@ -232,7 +232,7 @@ static void test_hifi4(void)
     {
     }
 
-#ifndef Q31_USED
+#if !(Q31_USED)
     test_hifi4_fir_f32(src_test_arr_f32, (float32_t *)dst_test_arr_f32, TEST_ARR_SIZE, AUDIO_SAMPLE_RATE);
 #else
     test_hifi4_fir_q31(src_test_arr_f32, src_test_arr_q31, (float32_t *)dst_test_arr_f32, (q31_t *)dst_test_arr_q31,
@@ -320,7 +320,7 @@ static void TxCallback(I2S_Type *base, i2s_dma_handle_t *handle, status_t comple
 	GPIO_PinWrite(GPIO, 0U, GPIO_DEBUG_PIN_TX, 0U);
 }
 
-#ifndef HIFI4_USED
+#if !(HIFI4_USED)
 static void RxCallback(I2S_Type *base, i2s_dma_handle_t *handle, status_t completionStatus, void *userData)
 {
 	i2s_transfer_t *transfer = (i2s_transfer_t *)userData;
@@ -339,7 +339,7 @@ static void RxCallback(I2S_Type *base, i2s_dma_handle_t *handle, status_t comple
 
 	if (!is_intA)
 	{
-		#ifndef Q31_USED
+		#if !(Q31_USED)
 		for (int i = 0, j = 0, k = (BUFFER_SIZE/2); i < BUFFER_SIZE; i += 2, ++j, ++k)
 		{
 			src_buffer_f32_1[j] = (float32_t)src_buffer_32_1[i];
@@ -354,18 +354,20 @@ static void RxCallback(I2S_Type *base, i2s_dma_handle_t *handle, status_t comple
 
 		#endif
 
-		#ifdef Q31_USED
+		#if Q31_USED
 //		fir_process_batch((q31_t *)src_buffer_q31_1, (q31_t *)dst_buffer_q31_1);
 //		iir_df1_process_batch((q31_t *)src_buffer_q31_1, (q31_t *)dst_buffer_q31_1);
-		drc_full_stereo_balanced_q31((q31_t *)src_buffer_q31_1, (q31_t *)dst_buffer_q31_1, (q31_t *)x_peak_log_q31_1);
+//		drc_full_stereo_balanced_q31((q31_t *)src_buffer_q31_1, (q31_t *)dst_buffer_q31_1, (q31_t *)x_peak_log_q31_1);
+		iir_df2_process_batch((q31_t *)src_buffer_q31_1, (q31_t *)dst_buffer_q31_1);
 		#else
 //		fir_process_batch((float32_t *)src_buffer_f32_1, (float32_t *)dst_buffer_f32_1);
 //		iir_df1_process_batch((float32_t *)src_buffer_f32_1, (float32_t *)dst_buffer_f32_1);
-		iir_df2T_process_batch((float32_t *)src_buffer_f32_1, (float32_t *)dst_buffer_f32_1);
+//		iir_df2T_process_batch((float32_t *)src_buffer_f32_1, (float32_t *)dst_buffer_f32_1);
+		iir_df2_process_batch((float32_t *)src_buffer_f32_1, (float32_t *)dst_buffer_f32_1);
 //		drc_full_stereo_balanced_f32((float32_t *)src_buffer_f32_1, (float32_t *)dst_buffer_f32_1, (float32_t *)x_peak_log_f32_1);
 		#endif
 
-		#ifndef Q31_USED
+		#if !(Q31_USED)
 		for (int i = 0, j = 0, k = (BUFFER_SIZE/2); i < BUFFER_SIZE; i += 2, ++j, ++k)
 		{
 			dst_buffer_32_1[i] = (int32_t)dst_buffer_f32_1[j];
@@ -381,7 +383,7 @@ static void RxCallback(I2S_Type *base, i2s_dma_handle_t *handle, status_t comple
 	}
 	else
 	{
-		#ifndef Q31_USED
+		#if !(Q31_USED)
 		for (int i = 0, j = 0, k = (BUFFER_SIZE/2); i < BUFFER_SIZE; i += 2, ++j, ++k)
 		{
 			src_buffer_f32_2[j] = (float32_t)src_buffer_32_2[i];
@@ -395,18 +397,20 @@ static void RxCallback(I2S_Type *base, i2s_dma_handle_t *handle, status_t comple
 		}
 		#endif
 
-		#ifndef Q31_USED
+		#if !(Q31_USED)
 //		fir_process_batch((float32_t *)src_buffer_f32_2, (float32_t *)dst_buffer_f32_2);
 //		iir_df1_process_batch((float32_t *)src_buffer_f32_2, (float32_t *)dst_buffer_f32_2);
-		iir_df2T_process_batch((float32_t *)src_buffer_f32_2, (float32_t *)dst_buffer_f32_2);
+//		iir_df2T_process_batch((float32_t *)src_buffer_f32_2, (float32_t *)dst_buffer_f32_2);
+		iir_df2_process_batch((float32_t *)src_buffer_f32_2, (float32_t *)dst_buffer_f32_2);
 //		drc_full_stereo_balanced_f32((float32_t *)src_buffer_f32_2, (float32_t *)dst_buffer_f32_2, (float32_t *)x_peak_log_f32_2);
 		#else
 //		fir_process_batch((q31_t *)src_buffer_q31_2, (q31_t *)dst_buffer_q31_2);
 //		iir_df1_process_batch((q31_t *)src_buffer_q31_2, (q31_t *)dst_buffer_q31_2);
-		drc_full_stereo_balanced_q31((q31_t *)src_buffer_q31_2, (q31_t *)dst_buffer_q31_2, (q31_t *)x_peak_log_q31_2);
+//		drc_full_stereo_balanced_q31((q31_t *)src_buffer_q31_2, (q31_t *)dst_buffer_q31_2, (q31_t *)x_peak_log_q31_2);
+		iir_df2_process_batch((q31_t *)src_buffer_q31_2, (q31_t *)dst_buffer_q31_2);
 		#endif
 
-		#ifndef Q31_USED
+		#if !(Q31_USED)
 		for (int i = 0, j = 0, k = (BUFFER_SIZE/2); i < BUFFER_SIZE; i += 2, ++j, ++k)
 		{
 			dst_buffer_32_2[i] = (int32_t)dst_buffer_f32_2[j];
@@ -515,7 +519,7 @@ static void RxCallback(I2S_Type *base, i2s_dma_handle_t *handle, status_t comple
 			src_buffer_f32_1[j] = (float32_t)src_buffer_32_1[i];
 			src_buffer_f32_1[k] = (float32_t)src_buffer_32_1[i+1];
 		}
-		#ifdef Q31_USED
+		#if Q31_USED
 		arm_scale_f32((float32_t *)src_buffer_f32_1, scale_down_factor, (float32_t *)src_buffer_f32_1, BUFFER_SIZE);
 		arm_float_to_q31((float32_t *)src_buffer_f32_1, (q31_t *)src_buffer_q31_1, BUFFER_SIZE);
 		#endif
@@ -527,7 +531,7 @@ static void RxCallback(I2S_Type *base, i2s_dma_handle_t *handle, status_t comple
 		}
 		SEMA42_Lock(APP_SEMA42, SEMA42_GATE, PROC_NUM);
 
-		#ifdef Q31_USED
+		#if Q31_USED
 		arm_q31_to_float((q31_t *)dst_buffer_q31_1, (float32_t *)dst_buffer_f32_1, BUFFER_SIZE);
 		arm_scale_f32((float32_t *)dst_buffer_f32_1, scale_up_factor, (float32_t *)dst_buffer_f32_1, BUFFER_SIZE);
 		#endif
@@ -550,7 +554,7 @@ static void RxCallback(I2S_Type *base, i2s_dma_handle_t *handle, status_t comple
 			src_buffer_f32_2[j] = (float32_t)src_buffer_32_2[i];
 			src_buffer_f32_2[k] = (float32_t)src_buffer_32_2[i+1];
 		}
-		#ifdef Q31_USED
+		#if Q31_USED
 		arm_scale_f32((float32_t *)src_buffer_f32_2, scale_down_factor, (float32_t *)src_buffer_f32_2, BUFFER_SIZE);
 		arm_float_to_q31((float32_t *)src_buffer_f32_2, (q31_t *)src_buffer_q31_2, BUFFER_SIZE);
 		#endif
@@ -562,7 +566,7 @@ static void RxCallback(I2S_Type *base, i2s_dma_handle_t *handle, status_t comple
 		}
 		SEMA42_Lock(APP_SEMA42, SEMA42_GATE, PROC_NUM);
 
-		#ifdef Q31_USED
+		#if Q31_USED
 		arm_q31_to_float((q31_t *)dst_buffer_q31_2, (float32_t *)dst_buffer_f32_2, BUFFER_SIZE);
 		arm_scale_f32((float32_t *)dst_buffer_f32_2, scale_up_factor, (float32_t *)dst_buffer_f32_2, BUFFER_SIZE);
 		#endif
@@ -726,7 +730,7 @@ static void configure_clocks(void)
     SYSCTL1->MCLKPINDIR = SYSCTL1_MCLKPINDIR_MCLKPINDIR_MASK;
 }
 
-#ifdef HIFI4_USED
+#if HIFI4_USED
 void APP_MU_IRQHandler_0(void)
 {
     uint32_t flag = MU_GetStatusFlags(APP_MU);
@@ -738,7 +742,7 @@ void APP_MU_IRQHandler_0(void)
     	{
 			case SRC_BUFFER_1_RCV:
 			{
-				#ifndef Q31_USED
+				#if !(Q31_USED)
 				src_buffer_f32_1 = (float32_t *)MU_ReceiveMsgNonBlocking(APP_MU, CHN_MU_REG_NUM);
 				#else
 				src_buffer_q31_1 = (q31_t *)MU_ReceiveMsgNonBlocking(APP_MU, CHN_MU_REG_NUM);
@@ -748,7 +752,7 @@ void APP_MU_IRQHandler_0(void)
 			}
 			case SRC_BUFFER_2_RCV:
 			{
-				#ifndef Q31_USED
+				#if !(Q31_USED)
 				src_buffer_f32_2 = (float32_t *)MU_ReceiveMsgNonBlocking(APP_MU, CHN_MU_REG_NUM);
 				#else
 				src_buffer_q31_2 = (q31_t *)MU_ReceiveMsgNonBlocking(APP_MU, CHN_MU_REG_NUM);
@@ -758,7 +762,7 @@ void APP_MU_IRQHandler_0(void)
 			}
     		case DST_BUFFER_1_RCV:
     		{
-				#ifndef Q31_USED
+				#if !(Q31_USED)
 				dst_buffer_f32_1 = (float32_t *)MU_ReceiveMsgNonBlocking(APP_MU, CHN_MU_REG_NUM);
 				#else
 				dst_buffer_q31_1 = (q31_t *)MU_ReceiveMsgNonBlocking(APP_MU, CHN_MU_REG_NUM);
@@ -769,7 +773,7 @@ void APP_MU_IRQHandler_0(void)
     		case DST_BUFFER_2_RCV:
     		{
     			MU_DisableInterrupts(APP_MU, kMU_Rx0FullInterruptEnable);
-				#ifndef Q31_USED
+				#if !(Q31_USED)
 				dst_buffer_f32_2 = (float32_t *)MU_ReceiveMsgNonBlocking(APP_MU, CHN_MU_REG_NUM);
 				#else
 				dst_buffer_q31_2 = (q31_t *)MU_ReceiveMsgNonBlocking(APP_MU, CHN_MU_REG_NUM);
@@ -794,7 +798,7 @@ void APP_MU_IRQHandler_0(void)
  */
 int main(void)
 {
-	#ifdef PQ_USED
+	#if PQ_USED
     /* Power up PQ RAM. */
     SYSCTL0->PDRUNCFG1_CLR = SYSCTL0_PDRUNCFG1_PQ_SRAM_APD_MASK | SYSCTL0_PDRUNCFG1_PQ_SRAM_PPD_MASK;
     /* Apply power setting. */
@@ -802,11 +806,12 @@ int main(void)
     /* Initialize POWERQUAD. */
     PQ_Init(POWERQUAD);
 
-	#ifdef Q31_USED
+	#if Q31_USED
     /* Set PQ config to Q31 format */
     PQ_SET_Q31_CONFIG;
+//    PQ_SetFormat(POWERQUAD, kPQ_CP_PQ, kPQ_Float);
 	#else
-    PQ_SetFormat(POWERQUAD, kPQ_CP_FIR, kPQ_Float);
+    PQ_SetFormat(POWERQUAD, kPQ_CP_PQ, kPQ_Float);
 	#endif
 	#endif
 
@@ -844,19 +849,22 @@ int main(void)
 
     calculate_coefficients();
 
-	#ifdef HIFI4_USED
+	#if HIFI4_USED
     init_hifi4();
 	#else
     init_fir_filter();
 
-	#ifndef PQ_USED
+    #if !(PQ_USED)
     init_iir_df1_filter();
-	#endif
-
-	#ifndef Q31_USED
+	#if !(Q31_USED)
     init_iir_df2T_filter();
-	#endif
-	#endif
+	#else
+
+    #endif /* !(Q31_USED) */
+	#else
+    init_iir_df2_filter();
+    #endif /* !(PQ_USED) */
+    #endif /* HIFI4_USED */
 
     start_digital_loopback();
 

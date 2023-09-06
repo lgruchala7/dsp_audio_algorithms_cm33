@@ -18,7 +18,7 @@
 /*******************************************************************************
  * Definitions
  ******************************************************************************/
-#ifdef PQ_USED
+#if PQ_USED
 #define LOG2(src_ptr, dst_ptr) 	do { \
 									PQ_LnF32((src_ptr), (dst_ptr)); \
 									PQ_DivF32((dst_ptr), (float32_t *)&LN_OF_2, (dst_ptr)); \
@@ -35,7 +35,7 @@
  * Variables
  ******************************************************************************/
 const static float32_t LN_OF_2 = 0.693147f;
-#ifndef Q31_USED
+#if !(Q31_USED)
 static float32_t AT;
 static float32_t RT;
 static float32_t RT_ctrl_factor;
@@ -75,7 +75,7 @@ static q31_t one_minus_RT;
 static q31_t one_minus_TAV;
 #endif
 
-#ifdef Q31_USED
+#if Q31_USED
 // Pre-calculated Q1.31 fixed-point natural logarithm values
 static q31_t ln_lookup_table[TABLE_SIZE];
 static q31_t exp_lookup_table[TABLE_SIZE];
@@ -90,7 +90,7 @@ static void rms_log2_calculate_f32(float32_t src, float32_t * dst_ptr, uint32_t 
 /*******************************************************************************
  * Code
  ******************************************************************************/
-#ifdef Q31_USED
+#if Q31_USED
 static void initialize_ln_lut(void)
 {
 	/* fill LUT of ln(x) for range (LUT_MIN_LN, 1) / SCALE_FACTOR */
@@ -112,7 +112,7 @@ static void initialize_exp_lut(void)
 }
 #endif
 
-#ifdef Q31_USED
+#if Q31_USED
 // Calculate natural logarithm using lookup table and interpolation
 static q31_t q31_ln(q31_t x_q31)
 {
@@ -144,7 +144,7 @@ static q31_t q31_ln(q31_t x_q31)
 }
 #endif
 
-#ifdef Q31_USED
+#if Q31_USED
 // Calculate exp() using lookup table and interpolation
 static q31_t q31_exp(q31_t x_q31) {
 
@@ -177,7 +177,7 @@ static void check_coefficients(float32_t log2_LT, float32_t  log2_CT, float32_t 
 		PRINTF("Wrong threshold value(s) defined\r\n");
 		exit(1);
 	}
-	#ifndef Q31_USED
+	#if !(Q31_USED)
 	if ((LS != 1.0f) || (CS >= 1.0f) || (CS <= 0.0f) || (ES <= -1.0f) || (ES >= 0.0f) || (NS >= -1.0f) ||
 		(ES_times_diff_ET_NT >= 0.0f))
 	{
@@ -207,7 +207,7 @@ static void check_coefficients(float32_t log2_LT, float32_t  log2_CT, float32_t 
 
 void calculate_coefficients(void)
 {
-	#ifndef Q31_USED
+	#if !(Q31_USED)
 	float32_t diff_ET_NT, diff_CT_LT;
 
 	AT = (float32_t)(1.0 - exp(-2.2 * 1000.0 / (t_at_ms * fs_hz)));
@@ -299,7 +299,7 @@ void calculate_coefficients(void)
 	#endif /* Q31_USED */
 }
 
-#ifndef Q31_USED
+#if !(Q31_USED)
 void limiter_f32(float32_t * src_signal_arr, float32_t * dst_signal_arr, size_t signal_arr_count)
 {
 	static float32_t ctrl_factor_old[CHANNEL_CNT] = {[0 ... (CHANNEL_CNT - 1)] = 1.0f};
@@ -343,7 +343,7 @@ void limiter_f32(float32_t * src_signal_arr, float32_t * dst_signal_arr, size_t 
 }
 #endif
 
-#ifndef Q31_USED
+#if !(Q31_USED)
 static void peak_log2_calculate_f32(float32_t src, float32_t * dst_ptr, uint32_t channel)
 {
 	static float32_t peak[CHANNEL_CNT] = {0.0f};
@@ -373,7 +373,7 @@ static void peak_log2_calculate_f32(float32_t src, float32_t * dst_ptr, uint32_t
 }
 #endif
 
-#ifndef Q31_USED
+#if !(Q31_USED)
 static void rms_log2_calculate_f32(float32_t src, float32_t * dst_ptr, uint32_t channel)
 {
 	static float32_t rms_pow2[CHANNEL_CNT] = {0.0f};
@@ -384,7 +384,7 @@ static void rms_log2_calculate_f32(float32_t src, float32_t * dst_ptr, uint32_t 
 }
 #endif
 
-#ifdef Q31_USED
+#if Q31_USED
 static void peak_log2_calculate_q31(q31_t src, q31_t * dst_ptr, uint32_t channel)
 {
 	static q31_t peak[CHANNEL_CNT] = {Q31_ZERO};
@@ -415,7 +415,7 @@ static void peak_log2_calculate_q31(q31_t src, q31_t * dst_ptr, uint32_t channel
 }
 #endif
 
-#ifdef Q31_USED
+#if Q31_USED
 static void rms_log2_calculate_q31(q31_t src, q31_t * dst_ptr, uint32_t channel)
 {
 	static q31_t rms_pow2[CHANNEL_CNT] = {Q31_ZERO};
@@ -435,7 +435,7 @@ static void rms_log2_calculate_q31(q31_t src, q31_t * dst_ptr, uint32_t channel)
 }
 #endif
 
-#ifdef Q31_USED
+#if Q31_USED
 void limiter_q31(q31_t * src_signal_arr, q31_t * dst_signal_arr, size_t signal_arr_count)
 {
 	static q31_t ctrl_factor_old[CHANNEL_CNT] = {[0 ... (CHANNEL_CNT - 1)] = 1.0f};
@@ -487,7 +487,7 @@ void limiter_q31(q31_t * src_signal_arr, q31_t * dst_signal_arr, size_t signal_a
 }
 #endif
 
-#ifndef Q31_USED
+#if !(Q31_USED)
 void compressor_expander_ngate_f32(float32_t * src_signal_arr, float32_t * dst_signal_arr, size_t signal_arr_count)
 {
 	static float32_t ctrl_factor_old[CHANNEL_CNT] = {[0 ... (CHANNEL_CNT - 1)] = 1.0f};
@@ -545,7 +545,7 @@ void compressor_expander_ngate_f32(float32_t * src_signal_arr, float32_t * dst_s
 }
 #endif
 
-#ifdef Q31_USED
+#if Q31_USED
 void compressor_expander_ngate_q31(q31_t * src_signal_arr, q31_t * dst_signal_arr, size_t signal_arr_count, q31_t * x_rms_log2_array)
 {
 	static q31_t ctrl_factor_old[CHANNEL_CNT] = {[0 ... (CHANNEL_CNT - 1)] = Q31_ONE};
@@ -625,7 +625,7 @@ void compressor_expander_ngate_q31(q31_t * src_signal_arr, q31_t * dst_signal_ar
 }
 #endif
 
-#ifdef Q31_USED
+#if Q31_USED
 void drc_full_q31(q31_t * src_signal_arr, q31_t * dst_signal_arr, size_t signal_arr_count, q31_t * x_peak_log2_array)
 {
 	static q31_t ctrl_factor_old[CHANNEL_CNT] = {[0 ... (CHANNEL_CNT - 1)] = 1.0f};
@@ -645,7 +645,7 @@ void drc_full_q31(q31_t * src_signal_arr, q31_t * dst_signal_arr, size_t signal_
 			peak_log2_calculate_q31(sample, &x_peak_log2, channel);
 			rms_log2_calculate_q31(sample, &x_rms_log2, channel);
 
-			#ifdef DEBUG
+			#if DEBUG
 			x_peak_log2_array[i] = x_peak_log2;
 			#endif
 
@@ -723,7 +723,7 @@ void drc_full_q31(q31_t * src_signal_arr, q31_t * dst_signal_arr, size_t signal_
 }
 #endif
 
-#ifndef Q31_USED
+#if !(Q31_USED)
 void drc_full_f32(float32_t * src_signal_arr, float32_t * dst_signal_arr, size_t signal_arr_count, float32_t * x_peak_log2_array)
 {
 	static float32_t ctrl_factor_old[CHANNEL_CNT] = {[0 ... (CHANNEL_CNT - 1)] = 1.0f};
@@ -742,7 +742,7 @@ void drc_full_f32(float32_t * src_signal_arr, float32_t * dst_signal_arr, size_t
 			peak_log2_calculate_f32(sample, &x_peak_log2, channel);
 			rms_log2_calculate_f32(sample, &x_rms_log2, channel);
 
-			#ifdef DEBUG
+			#if DEBUG
 			x_peak_log2_array[i] = x_peak_log2;
 			#endif
 
@@ -792,8 +792,8 @@ void drc_full_f32(float32_t * src_signal_arr, float32_t * dst_signal_arr, size_t
 }
 #endif
 
-#ifndef Q31_USED
-#ifndef PQ_USED
+#if !(Q31_USED)
+#if !(PQ_USED)
 void drc_full_stereo_balanced_f32(float32_t * src_signal_arr, float32_t * dst_signal_arr, float32_t * x_peak_log2_array)
 {
 	static float32_t ctrl_factor_old = 1.0f;
@@ -812,7 +812,7 @@ void drc_full_stereo_balanced_f32(float32_t * src_signal_arr, float32_t * dst_si
 		peak_log2_calculate_f32(avg_sample, &x_peak_log2, 0U);
 		rms_log2_calculate_f32(avg_sample, &x_rms_log2, 0U);
 
-		#ifdef DEBUG
+		#if DEBUG
 		x_peak_log2_array[i] = x_peak_log2;
 		x_peak_log2_array[i + channel_offset] = x_peak_log2;
 		#endif
@@ -886,7 +886,7 @@ void drc_full_stereo_balanced_f32(float32_t * src_signal_arr, float32_t * dst_si
 		peak_log2_calculate_f32(avg_sample, &x_peak_log2, 0U);
 		rms_log2_calculate_f32(avg_sample, &x_rms_log2, 0U);
 
-		#ifdef DEBUG
+		#if DEBUG
 		x_peak_log2_array[i] = x_peak_log2;
 		x_peak_log2_array[i + channel_offset] = x_peak_log2;
 		#endif
@@ -945,7 +945,7 @@ void drc_full_stereo_balanced_f32(float32_t * src_signal_arr, float32_t * dst_si
 #endif
 #endif
 
-#ifdef Q31_USED
+#if Q31_USED
 void drc_full_stereo_balanced_q31(q31_t * src_signal_arr, q31_t * dst_signal_arr, q31_t * x_peak_log2_array)
 {
 	static q31_t ctrl_factor_old = 1.0f;
@@ -964,7 +964,7 @@ void drc_full_stereo_balanced_q31(q31_t * src_signal_arr, q31_t * dst_signal_arr
 		peak_log2_calculate_q31(avg_sample, &x_peak_log2, 0U);
 		rms_log2_calculate_q31(avg_sample, &x_rms_log2, 0U);
 
-		#ifdef DEBUG
+		#if DEBUG
 		x_peak_log2_array[i] = x_peak_log2;
 		x_peak_log2_array[i + channel_offset] = x_peak_log2;
 		#endif
