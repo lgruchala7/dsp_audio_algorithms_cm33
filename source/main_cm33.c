@@ -357,14 +357,14 @@ static void RxCallback(I2S_Type *base, i2s_dma_handle_t *handle, status_t comple
 		#if Q31_USED
 //		fir_process_batch((q31_t *)src_buffer_q31_1, (q31_t *)dst_buffer_q31_1);
 //		iir_df1_process_batch((q31_t *)src_buffer_q31_1, (q31_t *)dst_buffer_q31_1);
-//		drc_full_stereo_balanced_q31((q31_t *)src_buffer_q31_1, (q31_t *)dst_buffer_q31_1, (q31_t *)x_peak_log_q31_1);
-		iir_df2_process_batch((q31_t *)src_buffer_q31_1, (q31_t *)dst_buffer_q31_1);
+		drc_full_stereo_balanced((q31_t *)src_buffer_q31_1, (q31_t *)dst_buffer_q31_1, (q31_t *)x_peak_log_q31_1);
+//		iir_df2_process_batch((q31_t *)src_buffer_q31_1, (q31_t *)dst_buffer_q31_1);
 		#else
 //		fir_process_batch((float32_t *)src_buffer_f32_1, (float32_t *)dst_buffer_f32_1);
 //		iir_df1_process_batch((float32_t *)src_buffer_f32_1, (float32_t *)dst_buffer_f32_1);
 //		iir_df2T_process_batch((float32_t *)src_buffer_f32_1, (float32_t *)dst_buffer_f32_1);
-		iir_df2_process_batch((float32_t *)src_buffer_f32_1, (float32_t *)dst_buffer_f32_1);
-//		drc_full_stereo_balanced_f32((float32_t *)src_buffer_f32_1, (float32_t *)dst_buffer_f32_1, (float32_t *)x_peak_log_f32_1);
+//		iir_df2_process_batch((float32_t *)src_buffer_f32_1, (float32_t *)dst_buffer_f32_1);
+		drc_full_stereo_balanced((float32_t *)src_buffer_f32_1, (float32_t *)dst_buffer_f32_1, (float32_t *)x_peak_log_f32_1);
 		#endif
 
 		#if !(Q31_USED)
@@ -401,13 +401,13 @@ static void RxCallback(I2S_Type *base, i2s_dma_handle_t *handle, status_t comple
 //		fir_process_batch((float32_t *)src_buffer_f32_2, (float32_t *)dst_buffer_f32_2);
 //		iir_df1_process_batch((float32_t *)src_buffer_f32_2, (float32_t *)dst_buffer_f32_2);
 //		iir_df2T_process_batch((float32_t *)src_buffer_f32_2, (float32_t *)dst_buffer_f32_2);
-		iir_df2_process_batch((float32_t *)src_buffer_f32_2, (float32_t *)dst_buffer_f32_2);
-//		drc_full_stereo_balanced_f32((float32_t *)src_buffer_f32_2, (float32_t *)dst_buffer_f32_2, (float32_t *)x_peak_log_f32_2);
+//		iir_df2_process_batch((float32_t *)src_buffer_f32_2, (float32_t *)dst_buffer_f32_2);
+		drc_full_stereo_balanced((float32_t *)src_buffer_f32_2, (float32_t *)dst_buffer_f32_2, (float32_t *)x_peak_log_f32_2);
 		#else
 //		fir_process_batch((q31_t *)src_buffer_q31_2, (q31_t *)dst_buffer_q31_2);
 //		iir_df1_process_batch((q31_t *)src_buffer_q31_2, (q31_t *)dst_buffer_q31_2);
-//		drc_full_stereo_balanced_q31((q31_t *)src_buffer_q31_2, (q31_t *)dst_buffer_q31_2, (q31_t *)x_peak_log_q31_2);
-		iir_df2_process_batch((q31_t *)src_buffer_q31_2, (q31_t *)dst_buffer_q31_2);
+		drc_full_stereo_balanced((q31_t *)src_buffer_q31_2, (q31_t *)dst_buffer_q31_2, (q31_t *)x_peak_log_q31_2);
+//		iir_df2_process_batch((q31_t *)src_buffer_q31_2, (q31_t *)dst_buffer_q31_2);
 		#endif
 
 		#if !(Q31_USED)
@@ -853,17 +853,15 @@ int main(void)
     init_hifi4();
 	#else
     init_fir_filter();
-
-    #if !(PQ_USED)
-    init_iir_df1_filter();
-	#if !(Q31_USED)
-    init_iir_df2T_filter();
-	#else
-
-    #endif /* !(Q31_USED) */
-	#else
+    #if PQ_USED
     init_iir_df2_filter();
-    #endif /* !(PQ_USED) */
+	#else
+    init_iir_df1_filter();
+	#if Q31_USED
+	#else
+    init_iir_df2T_filter();
+    #endif /* Q31_USED */
+    #endif /* PQ_USED */
     #endif /* HIFI4_USED */
 
     start_digital_loopback();

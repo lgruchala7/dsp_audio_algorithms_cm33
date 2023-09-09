@@ -25,6 +25,7 @@
 
 /* Q31 constants */
 #define Q31_ONE				(q31_t)0x7fffffff
+#define Q31_MIN_ONE			(q31_t)0x80000000
 #define Q31_ONE_F32			(q31_t)0x7fffffff
 #define Q31_ZERO			(q31_t)0x00000000
 

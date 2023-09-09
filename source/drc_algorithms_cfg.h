@@ -18,38 +18,7 @@
  * Definitions
  ******************************************************************************/
 //#define _16bit
-#if Q31_USED
-/* LUT constants */
-#define TABLE_SIZE      	4096
-#define SCALE_FACTOR	   	5
-#define LUT_MIN_LN         	0.006738f
-#define LUT_MIN_LN_Q31     	0x00dcca71
-#define LUT_MAX_LN         	1.0f
-#define LUT_RANGE_LN       	0x7f23358f
-#define LUT_RANGE_LN_F32   	(LUT_MAX_LN - LUT_MIN_LN)
-#define LUT_MIN_EXP         -1.0f
-#define LUT_MIN_EXP_Q31     0x80000000
-#define LUT_MAX_EXP        	0.0f
-#define LUT_RANGE_EXP      	0x80000000
-#define LUT_RANGE_EXP_F32 	(LUT_MAX_EXP - LUT_MIN_EXP)
-#if PQ_USED
-/* Q31 operations */
-#define Q31_MUL(x, y)							((__SSAT((((q63_t) (x) * (y)) >> 32), 31)) << 1U)
-#define Q31_ADD(x, y)							(__QADD((x), (y)))
-#define Q31_SUB(x, y)							(__QSUB((x), (y)))
-#define Q31_DIV(x, y, q_ptr, sh_ptr)			(arm_divide_q31((x), (y), (q_ptr), (sh_ptr)))
-#define Q31_LOG2(arg, result_ptr, sh_ptr) 		Q31_DIV(q31_ln(arg), LN_OF_2_Q31, (result_ptr), (sh_ptr))
-#define Q31_POW2(x)								(q31_exp((x)))
-#else
-/* Q31 operations */
-#define Q31_MUL(x, y)							((__SSAT((((q63_t) (x) * (y)) >> 32), 31)) << 1U)
-#define Q31_ADD(x, y)							(__QADD((x), (y)))
-#define Q31_SUB(x, y)							(__QSUB((x), (y)))
-#define Q31_DIV(x, y, q_ptr, sh_ptr)			(arm_divide_q31((x), (y), (q_ptr), (sh_ptr)))
-#define Q31_LOG2(arg, result_ptr, shift_ptr) 	Q31_DIV(q31_ln(arg), LN_OF_2_Q31, (result_ptr), (shift_ptr))//(logf(x) / LN_OF_2)
-#define Q31_POW2(x)								(q31_exp((x)))
-#endif /* PQ_USED */
-#endif /* Q31_USED */
+
 /*******************************************************************************
  * Variables
  ******************************************************************************/

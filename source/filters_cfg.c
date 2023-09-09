@@ -266,11 +266,6 @@ void init_iir_df2_filter(void)
 	for (int i = 0; i < IIR_SOS; ++i)
 	{
 		arm_copy_f32(&(iir_df2_coeff_f32[i * 5]), &(iir_df2_state_f32_1[(i * 8) + 2]), 5U);
-//		iir_df2_state_f32_1[(i * 8) + 2] = iir_df2_coeff_f32[(i * 5) + 0];
-//		iir_df2_state_f32_1[(i * 8) + 3] = iir_df2_coeff_f32[(i * 5) + 1];
-//		iir_df2_state_f32_1[(i * 8) + 4] = iir_df2_coeff_f32[(i * 5) + 2];
-//		iir_df2_state_f32_1[(i * 8) + 5] = iir_df2_coeff_f32[(i * 5) + 3];
-//		iir_df2_state_f32_1[(i * 8) + 6] = iir_df2_coeff_f32[(i * 5) + 4];
 	}
 	PQ_BiquadCascadeDf2Init(&iir_df2_instance_f32_1, IIR_SOS, (pq_biquad_state_t *)iir_df2_state_f32_1);
 
@@ -278,11 +273,6 @@ void init_iir_df2_filter(void)
 	for (int i = 0; i < IIR_SOS; ++i)
 	{
 		arm_copy_f32(&(iir_df2_coeff_f32[i * 5]), &(iir_df2_state_f32_2[(i * 8) + 2]), 5U);
-//		iir_df2_state_f32_2[(i * 8) + 2] = iir_df2_coeff_f32[(i * 5) + 0];
-//		iir_df2_state_f32_2[(i * 8) + 3] = iir_df2_coeff_f32[(i * 5) + 1];
-//		iir_df2_state_f32_2[(i * 8) + 4] = iir_df2_coeff_f32[(i * 5) + 2];
-//		iir_df2_state_f32_2[(i * 8) + 5] = iir_df2_coeff_f32[(i * 5) + 3];
-//		iir_df2_state_f32_2[(i * 8) + 6] = iir_df2_coeff_f32[(i * 5) + 4];
 	}
 	PQ_BiquadCascadeDf2Init(&iir_df2_instance_f32_2, IIR_SOS, (pq_biquad_state_t *)iir_df2_state_f32_2);
 }
@@ -290,8 +280,6 @@ void init_iir_df2_filter(void)
 #else
 void init_iir_df2_filter(void)
 {
-//	arm_float_to_q31(iir_df2_coeff_f32, iir_df2_coeff_q31, IIR_COEFF_COUNT); //???
-
 	arm_fill_q31(Q31_ZERO, iir_df2_state_q31_1, IIR_SOS * 8);
 	for (int i = 0; i < IIR_SOS; ++i)
 	{
@@ -429,8 +417,8 @@ void iir_df1_process_batch(q31_t * src_buffer, q31_t * dst_buffer)
 #if !(PQ_USED)
 void iir_df2T_process_batch(float32_t * src_buffer, float32_t * dst_buffer)
 {
-	arm_biquad_cascade_df2_f32(&iir_df2T_instance_f32_1, &src_buffer[0], &dst_buffer[0], BUFFER_SIZE/2);
-	arm_biquad_cascade_df2_f32(&iir_df2T_instance_f32_2, &src_buffer[BUFFER_SIZE/2], &dst_buffer[BUFFER_SIZE/2], BUFFER_SIZE/2);
+	arm_biquad_cascade_df2T_f32(&iir_df2T_instance_f32_1, &src_buffer[0], &dst_buffer[0], BUFFER_SIZE/2);
+	arm_biquad_cascade_df2T_f32(&iir_df2T_instance_f32_2, &src_buffer[BUFFER_SIZE/2], &dst_buffer[BUFFER_SIZE/2], BUFFER_SIZE/2);
 }
 #endif
 #endif
