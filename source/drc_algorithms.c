@@ -38,16 +38,16 @@
 #define Q31_ADD(x, y)							(__QADD((x), (y)))
 #define Q31_SUB(x, y)							(__QSUB((x), (y)))
 #define Q31_DIV(num, den, q_ptr, sh_ptr)		(arm_divide_q31((num), (den), (q_ptr), (sh_ptr)))
-#define Q31_LOG2(src, result_ptr, shift_ptr) 	Q31_DIV(q31_ln(src), LN_OF_2_Q31, (result_ptr), (shift_ptr))
-#define Q31_POW2(src, dst_ptr)					(*dst_ptr = q31_exp((src)))
+#define Q31_LOG2(arg, result_ptr, shift_ptr) 	Q31_DIV(q31_ln(arg), LN_OF_2_Q31, (result_ptr), (shift_ptr))
+#define Q31_POW2(exponent, dst_ptr)				(*dst_ptr = q31_exp((exponent)))
 #endif
 #if PQ_USED
-#define LOG2(src_ptr, dst_ptr) 	do { \
-									PQ_LnF32((src_ptr), (dst_ptr)); \
+#define LOG2(arg_ptr, dst_ptr) 	do { \
+									PQ_LnF32((arg_ptr), (dst_ptr)); \
 									PQ_DivF32((dst_ptr), (float32_t *)&LN_OF_2, (dst_ptr)); \
 								} while (0)
 #else
-#define LOG2(src_ptr, dst_ptr)	(*(dst_ptr) = (logf(*(src_ptr)) / LN_OF_2))
+#define LOG2(arg_ptr, dst_ptr)	(*(dst_ptr) = (logf(*(arg_ptr)) / LN_OF_2))
 #endif
 
 /*******************************************************************************
@@ -57,7 +57,7 @@
 /*******************************************************************************
  * Variables
  ******************************************************************************/
-const static float32_t LN_OF_2 = 0.693147f;
+static const float32_t LN_OF_2 = 0.693147f;
 #if !(Q31_USED)
 static float32_t AT;
 static float32_t RT;
@@ -75,7 +75,7 @@ static float32_t one_minus_AT;
 static float32_t one_minus_RT;
 static float32_t one_minus_TAV;
 #else
-const static q31_t LN_OF_2_Q31 = (q31_t)0x58b90bfc;
+static const q31_t LN_OF_2_Q31 = (q31_t)0x58b90bfc;
 static q31_t AT;
 static q31_t RT;
 static q31_t RT_ctrl_factor;
@@ -131,10 +131,12 @@ static void initialize_ln_lut(void)
     	ln_lookup_table[i] = (q31_t)((logf(x) / (float32_t)SCALE_FACTOR) * Q31_ONE_F32);
     }
 }
+#endif
 
+#if Q31_USED
 static void initialize_exp_lut(void)
 {
-	/* fill LUT of ln(x) for range (-1, 0) */
+	/* fill LUT of e^(x) for range (-1, 0) */
     for (int i = 0; i < TABLE_SIZE; i++)
     {
     	float32_t x = LUT_MIN_EXP + ((float32_t)i / (float32_t)TABLE_SIZE) * LUT_RANGE_EXP_F32;
@@ -194,7 +196,6 @@ static inline q31_t q31_ln(q31_t x_q31)
 // Calculate exp() using lookup table and interpolation
 static inline q31_t q31_exp(q31_t x_q31)
 {
-
 	q31_t input_val = (q31_t)(x_q31 >> 15);
 	q31_t result = PQ_EtoxFixed(input_val) << 15;
 
@@ -205,9 +206,9 @@ static inline q31_t q31_exp(q31_t x_q31)
 {
 
     // Calculate index into the lookup table
-    int index = (int)((q63_t)(x_q31 - LUT_MIN_EXP_Q31) * TABLE_SIZE / LUT_RANGE_EXP);
+    int index = (int)((q63_t)((uint32_t)x_q31 - LUT_MIN_EXP_Q31) * TABLE_SIZE / LUT_RANGE_EXP);
 
-    if (x_q31 < LUT_MIN_EXP_Q31)
+    if ((uint32_t)x_q31 < (uint32_t)LUT_MIN_EXP_Q31)
     {
         return exp_lookup_table[0];
     }
@@ -252,10 +253,10 @@ static void check_coefficients(float32_t log2_LT, float32_t  log2_CT, float32_t 
 		PRINTF("Wrong slope value(s) defined\r\n");
 		exit(1);
 	}
-	if ((((log2_LT - 1.0f) / LS_INV) >= SCALE_FACTOR) ||
+	if ((((log2_LT - 1.0f) / (float32_t)LS_INV) >= SCALE_FACTOR) ||
 		((CS * (log2_CT - log2_LT)) >= SCALE_FACTOR) ||
 		((ES * (log2_ET - log2_NT)) >= SCALE_FACTOR) ||
-		(((log2_NT - log2_NT_MUTE) / NS_INV) >= SCALE_FACTOR))
+		(((log2_NT - log2_NT_MUTE) / (float32_t)NS_INV) >= SCALE_FACTOR))
 	{
 		PRINTF("Wrong ranges value(s) defined\r\n");
 	}
@@ -290,13 +291,12 @@ void calculate_coefficients(void)
 	CS_times_diff_CT_LT = (CS * diff_CT_LT);
 	#else
 	float32_t AT_f32, RT_f32, TAV_f32, AT_ctrl_factor_f32, RT_ctrl_factor_f32;
-	q31_t ES_times_diff_ET_NT, CS_times_diff_CT_LT;
 
 	AT_f32 = (float32_t)(1.0 - expf(-2.2f * 1000.0f / (t_at_ms * fs_hz)));
 	RT_f32 = (float32_t)(1.0 - expf(-2.2f * 1000.0f / (t_re_ms * fs_hz)));
 	TAV_f32 = (float32_t)(1.0 - expf((-2.2f * 1000.0f) / (t_tav_ms * fs_hz)));
-	AT_ctrl_factor_f32 = (float32_t)(1.0 - expf(-2.2f * 1000.0f / ((t_at_ms) * fs_hz)));
-	RT_ctrl_factor_f32 = (float32_t)(1.0 - expf(-2.2 * 1000.0f / ((t_re_ms) * fs_hz)));
+	AT_ctrl_factor_f32 = (float32_t)(1.0f - expf(-2.2f * 1000.0f / ((t_at_ms) * fs_hz)));
+	RT_ctrl_factor_f32 = (float32_t)(1.0f - expf(-2.2f * 1000.0f / ((t_re_ms) * fs_hz)));
 
 	arm_float_to_q31(&AT_f32, &AT, 1);
 	arm_float_to_q31(&RT_f32, &RT, 1);
@@ -355,10 +355,6 @@ void calculate_coefficients(void)
 	initialize_exp_lut();
 	#endif /* Q31_USED */
 }
-
-#if !(Q31_USED)
-
-#endif
 
 #if Q31_USED
 static inline void peak_log2_calculate(q31_t src, q31_t * dst_ptr, uint32_t channel)
@@ -550,7 +546,7 @@ void limiter(float32_t * src_signal_arr, float32_t * dst_signal_arr, size_t sign
 
 
 #if Q31_USED
-void compressor_expander_ngate(q31_t * src_signal_arr, q31_t * dst_signal_arr, size_t signal_arr_count, q31_t * x_rms_log2_array)
+void compressor_expander_ngate(q31_t * src_signal_arr, q31_t * dst_signal_arr, size_t signal_arr_count)
 {
 	static q31_t ctrl_factor_old[CHANNEL_CNT] = {[0 ... (CHANNEL_CNT - 1)] = Q31_ONE};
 	static q31_t ctrl_factor_smooth[CHANNEL_CNT] = {[0 ... (CHANNEL_CNT - 1)] = Q31_ONE};
@@ -565,8 +561,6 @@ void compressor_expander_ngate(q31_t * src_signal_arr, q31_t * dst_signal_arr, s
 		for (uint32_t i = (uint32_t)(channel * signal_arr_count / 2); i < (uint32_t)((signal_arr_count / 2) * (channel + 1)); ++i)
 		{
 			rms_log2_calculate(src_signal_arr[i], &x_rms_log2, channel);
-
-			x_rms_log2_array[i] = x_rms_log2;
 
 			if (x_rms_log2 > log2_CT_scaled)
 			{
@@ -688,7 +682,7 @@ void compressor_expander_ngate(float32_t * src_signal_arr, float32_t * dst_signa
 #endif /* Q31_USED */
 
 #if Q31_USED
-void drc_full(q31_t * src_signal_arr, q31_t * dst_signal_arr, size_t signal_arr_count, q31_t * x_peak_log2_array)
+void drc_full(q31_t * src_signal_arr, q31_t * dst_signal_arr, size_t signal_arr_count)
 {
 	static q31_t ctrl_factor_old[CHANNEL_CNT] = {[0 ... (CHANNEL_CNT - 1)] = 1.0f};
 	static q31_t ctrl_factor_smooth[CHANNEL_CNT] = {[0 ... (CHANNEL_CNT - 1)] = 1.0f};
@@ -706,10 +700,6 @@ void drc_full(q31_t * src_signal_arr, q31_t * dst_signal_arr, size_t signal_arr_
 			q31_t sample = src_signal_arr[i];
 			peak_log2_calculate(sample, &x_peak_log2, channel);
 			rms_log2_calculate(sample, &x_rms_log2, channel);
-
-			#if DEBUG
-			x_peak_log2_array[i] = x_peak_log2;
-			#endif
 
 			if (x_peak_log2 > log2_LT_scaled)
 			{
@@ -786,7 +776,7 @@ void drc_full(q31_t * src_signal_arr, q31_t * dst_signal_arr, size_t signal_arr_
 
 #else
 
-void drc_full(float32_t * src_signal_arr, float32_t * dst_signal_arr, size_t signal_arr_count, float32_t * x_peak_log2_array)
+void drc_full(float32_t * src_signal_arr, float32_t * dst_signal_arr, size_t signal_arr_count)
 {
 	static float32_t ctrl_factor_old[CHANNEL_CNT] = {[0 ... (CHANNEL_CNT - 1)] = 1.0f};
 	static float32_t ctrl_factor_smooth[CHANNEL_CNT] = {[0 ... (CHANNEL_CNT - 1)] = 1.0f};
@@ -803,10 +793,6 @@ void drc_full(float32_t * src_signal_arr, float32_t * dst_signal_arr, size_t sig
 			float32_t sample = src_signal_arr[i];
 			peak_log2_calculate(sample, &x_peak_log2, channel);
 			rms_log2_calculate(sample, &x_rms_log2, channel);
-
-			#if DEBUG
-			x_peak_log2_array[i] = x_peak_log2;
-			#endif
 
 			if (x_peak_log2 > log2_LT)
 			{
@@ -855,7 +841,8 @@ void drc_full(float32_t * src_signal_arr, float32_t * dst_signal_arr, size_t sig
 #endif /* Q31_USED */
 
 #if Q31_USED
-void drc_full_stereo_balanced(q31_t * src_signal_arr, q31_t * dst_signal_arr, q31_t * x_peak_log2_array)
+#if PQ_USED
+void drc_full_stereo_balanced(q31_t * src_signal_arr, q31_t * dst_signal_arr)
 {
 	static q31_t ctrl_factor_old = 1.0f;
 	static q31_t ctrl_factor_smooth = 1.0f;
@@ -880,11 +867,6 @@ void drc_full_stereo_balanced(q31_t * src_signal_arr, q31_t * dst_signal_arr, q3
 		q31_t avg_sample = (q31_t)(((q63_t)src_signal_arr[i] + (q63_t)src_signal_arr[i + channel_offset]) >> 1); // >>1 ??
 		peak_log2_calculate(avg_sample, &x_peak_log2, 0U);
 		rms_log2_calculate(avg_sample, &x_rms_log2, 0U);
-
-		#if DEBUG
-		x_peak_log2_array[i] = x_peak_log2;
-		x_peak_log2_array[i + channel_offset] = x_peak_log2;
-		#endif
 
 		if (x_peak_log2 > log2_LT_scaled)
 		{
@@ -965,11 +947,105 @@ void drc_full_stereo_balanced(q31_t * src_signal_arr, q31_t * dst_signal_arr, q3
 		dst_signal_arr[i + channel_offset] = Q31_MUL(src_signal_arr[i + channel_offset], ctrl_factor_smooth);
 	}
 }
+#else
+void drc_full_stereo_balanced(q31_t * src_signal_arr, q31_t * dst_signal_arr)
+{
+	static q31_t ctrl_factor_old = 1.0f;
+	static q31_t ctrl_factor_smooth = 1.0f;
+	q31_t x_rms_log2;
+	q31_t x_peak_log2;
+	q31_t ctrl_factor;
+	q31_t ctrl_factor_exp;
+	q31_t k;
+	int16_t shift;
+	int channel_offset = BUFFER_SIZE / 2;
+
+	for (int i = 0; i < channel_offset; ++i)
+	{
+		q31_t avg_sample = (q31_t)(((q63_t)src_signal_arr[i] + (q63_t)src_signal_arr[i + channel_offset]) >> 1); // >>1 ??
+		peak_log2_calculate(avg_sample, &x_peak_log2, 0U);
+		rms_log2_calculate(avg_sample, &x_rms_log2, 0U);
+
+		if (x_peak_log2 > log2_LT_scaled)
+		{
+			Q31_DIV(Q31_SUB(log2_LT_scaled, x_peak_log2), LS_INV, &ctrl_factor_exp, &shift); //to delete?? division by 1
+			assert(shift == 0U);
+			Q31_POW2(ctrl_factor_exp, &ctrl_factor);
+
+			q31_t temp = ctrl_factor;
+			for (int i = 0; i < SCALE_FACTOR; i++)
+			{
+				ctrl_factor = Q31_MUL(ctrl_factor, temp);
+			}
+			ctrl_factor = Q31_MUL(ctrl_factor, pow2_CS_times_diff_CT_LT);
+		}
+		else if (x_rms_log2 > log2_CT_scaled)
+		{
+			ctrl_factor_exp = Q31_MUL(CS, Q31_SUB(log2_CT_scaled, x_rms_log2));
+			Q31_POW2(ctrl_factor_exp, &ctrl_factor);
+
+			q31_t temp = ctrl_factor;
+			for (int i = 0; i < SCALE_FACTOR; i++)
+			{
+				ctrl_factor = Q31_MUL(ctrl_factor, temp);
+			}
+		}
+		else if (x_rms_log2 < log2_NT_MUTE_scaled)
+		{
+			ctrl_factor = Q31_ZERO;
+		}
+		else if (x_rms_log2 < log2_NT_scaled)
+		{
+			Q31_DIV(Q31_SUB(log2_NT_scaled, x_rms_log2), NS_INV, &ctrl_factor_exp, &shift);
+			assert(shift == 0U);
+			Q31_POW2(ctrl_factor_exp, &ctrl_factor);
+
+			q31_t temp = ctrl_factor;
+			for (int i = 0; i < SCALE_FACTOR; i++)
+			{
+				ctrl_factor = Q31_MUL(ctrl_factor, temp);
+			}
+			ctrl_factor = Q31_MUL(ctrl_factor, pow2_ES_times_diff_ET_NT);
+		}
+		else if (x_rms_log2 < log2_ET_scaled)
+		{
+			ctrl_factor_exp = Q31_MUL(ES, Q31_SUB(log2_ET_scaled, x_rms_log2));
+			Q31_POW2(ctrl_factor_exp, &ctrl_factor);
+
+			q31_t temp = ctrl_factor;
+			for (int i = 0; i < SCALE_FACTOR; i++)
+			{
+				ctrl_factor = Q31_MUL(ctrl_factor, temp);
+			}
+		}
+		else
+		{
+			ctrl_factor = Q31_ONE;
+		}
+
+		if (ctrl_factor < ctrl_factor_old)
+		{
+			k = RT_ctrl_factor;
+		}
+		else
+		{
+			k = AT_ctrl_factor;
+		}
+
+		/* smooth control factor */
+		ctrl_factor_smooth = Q31_ADD(Q31_MUL(Q31_SUB(Q31_ONE, k), ctrl_factor_smooth), Q31_MUL(k, ctrl_factor));
+		ctrl_factor_old = ctrl_factor;
+		/* calculate output sample */
+		dst_signal_arr[i] = Q31_MUL(src_signal_arr[i], ctrl_factor_smooth);
+		dst_signal_arr[i + channel_offset] = Q31_MUL(src_signal_arr[i + channel_offset], ctrl_factor_smooth);
+	}
+}
+#endif
 
 #else
 
 #if PQ_USED
-void drc_full_stereo_balanced(float32_t * src_signal_arr, float32_t * dst_signal_arr, float32_t * x_peak_log2_array)
+void drc_full_stereo_balanced(float32_t * src_signal_arr, float32_t * dst_signal_arr)
 {
 	static float32_t ctrl_factor_old = 1.0f;
 	static float32_t ctrl_factor_smooth = 1.0f;
@@ -989,11 +1065,6 @@ void drc_full_stereo_balanced(float32_t * src_signal_arr, float32_t * dst_signal
 
 		peak_log2_calculate(avg_sample, &x_peak_log2, 0U);
 		rms_log2_calculate(avg_sample, &x_rms_log2, 0U);
-
-		#if DEBUG
-		x_peak_log2_array[i] = x_peak_log2;
-		x_peak_log2_array[i + channel_offset] = x_peak_log2;
-		#endif
 
 		if (x_peak_log2 > log2_LT)
 		{
@@ -1049,7 +1120,7 @@ void drc_full_stereo_balanced(float32_t * src_signal_arr, float32_t * dst_signal
 
 #else
 
-void drc_full_stereo_balanced(float32_t * src_signal_arr, float32_t * dst_signal_arr, float32_t * x_peak_log2_array)
+void drc_full_stereo_balanced(float32_t * src_signal_arr, float32_t * dst_signal_arr)
 {
 	static float32_t ctrl_factor_old = 1.0f;
 	static float32_t ctrl_factor_smooth = 1.0f;
@@ -1066,11 +1137,6 @@ void drc_full_stereo_balanced(float32_t * src_signal_arr, float32_t * dst_signal
 
 		peak_log2_calculate(avg_sample, &x_peak_log2, 0U);
 		rms_log2_calculate(avg_sample, &x_rms_log2, 0U);
-
-		#if DEBUG
-		x_peak_log2_array[i] = x_peak_log2;
-		x_peak_log2_array[i + channel_offset] = x_peak_log2;
-		#endif
 
 		if (x_peak_log2 > log2_LT)
 		{

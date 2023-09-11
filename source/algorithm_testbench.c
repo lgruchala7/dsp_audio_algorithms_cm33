@@ -34,68 +34,6 @@
 /*******************************************************************************
  * Code
  ******************************************************************************/
-static void init_arr_with_rand_16(int16_t * arr, size_t arr_size)
-{
-	srand(time(NULL));
-    for (int i = 0 ; i < arr_size ; i++)
-    {
-    	arr[i] = (int16_t)((rand() % INT16_MAX) - INT16_MAX);
-    }
-}
-
-static void init_arr_with_rand_f32(float * arr, size_t arr_size)
-{
-	srand(time(NULL));
-    for (int i = 0 ; i < arr_size ; i++)
-    {
-    	arr[i] = (float)(rand() % UINT8_MAX);
-    }
-}
-
-void generate_sine_wave_16(int16_t * input_vec, uint32_t vec_len, uint32_t fs, float max_amplitude, float * freq, float * amp, int freq_cnt)
-{
-	float * rad 	= (float *)malloc(sizeof(float) * freq_cnt);
-	float * comp = (float *)malloc(sizeof(float) * freq_cnt);
-	float temp_comp_sum 	= 0.0f;
-	float amp_sum 			= 0.0f;
-
-	if (max_amplitude > (float)INT16_MAX)
-	{
-		PRINTF("\r\nChange amplitude!!!\r\n");
-	}
-
-	for (uint32_t i = 0U; i < freq_cnt; i++)
-	{
-		amp_sum += amp[i];
-	}
-
-	for (uint32_t i = 0U, sample_num = 0U; i < vec_len; i += 2, sample_num++)
-	{
-		/* convert to radians */
-		for (uint32_t j = 0U; j < freq_cnt; j++)
-		{
-			rad[j] = (2 * PI * freq[j] * sample_num / fs);
-		}
-
-		/* calculate component signals values */
-		for (uint32_t j = 0U; j < freq_cnt; j++)
-		{
-			comp[j] = (max_amplitude * amp[j] * arm_sin_f32(rad[j]));
-		}
-
-		temp_comp_sum = 0.0f;
-		/* sum component signals */
-		for (uint32_t j = 0U; j < freq_cnt; j++)
-		{
-			temp_comp_sum += comp[j];
-		}
-		input_vec[i] = (int16_t)(temp_comp_sum / amp_sum);
-	}
-
-	free(rad);
-	free(comp);
-}
-
 void generate_sine_wave_f32(float32_t * input_vec, uint32_t vec_len, uint32_t fs, float max_amplitude, float * freq, float * amp, int freq_cnt)
 {
 	float * rad 	= (float *)malloc(sizeof(float) * freq_cnt);
@@ -308,11 +246,11 @@ void test_drc_algorithm(void (*algorithm_func)(float32_t *, float32_t *, size_t)
 	float amp[] 	= {0.1f, 0.2f, 2.0f};
 	int freq_cnt = sizeof(freq) / sizeof(freq[0]);
 
-	generate_sine_wave_f32(&src_buffer[0], buffer_len/5, fs, (float)INT16_MAX * 0.15, freq, amp, freq_cnt);
-	generate_sine_wave_f32(&src_buffer[1000], buffer_len/5, fs, (float)INT16_MAX * 0.40, freq, amp, freq_cnt);
-	generate_sine_wave_f32(&src_buffer[2000], buffer_len/5, fs, (float)INT16_MAX * 0.65, freq, amp, freq_cnt);
-	generate_sine_wave_f32(&src_buffer[3000], buffer_len/5, fs, (float)INT16_MAX * 0.8, freq, amp, freq_cnt);
-	generate_sine_wave_f32(&src_buffer[4000], buffer_len/5, fs, (float)INT16_MAX * 0.95, freq, amp, freq_cnt);
+	generate_sine_wave_f32(&src_buffer[0], buffer_len/5, fs, (float)INT16_MAX * 0.15f, freq, amp, freq_cnt);
+	generate_sine_wave_f32(&src_buffer[1000], buffer_len/5, fs, (float)INT16_MAX * 0.40f, freq, amp, freq_cnt);
+	generate_sine_wave_f32(&src_buffer[2000], buffer_len/5, fs, (float)INT16_MAX * 0.65f, freq, amp, freq_cnt);
+	generate_sine_wave_f32(&src_buffer[3000], buffer_len/5, fs, (float)INT16_MAX * 0.8f, freq, amp, freq_cnt);
+	generate_sine_wave_f32(&src_buffer[4000], buffer_len/5, fs, (float)INT16_MAX * 0.95f, freq, amp, freq_cnt);
 
 	print_buffer_data_f32(src_buffer, buffer_len);
 	algorithm_func(src_buffer, dst_buffer, buffer_len);

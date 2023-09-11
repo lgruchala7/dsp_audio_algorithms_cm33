@@ -16,10 +16,10 @@
 /*******************************************************************************
  * Definitions
  ******************************************************************************/
-#define FIR_ORDER			256U
-#define FIR_COEFF_COUNT		(FIR_ORDER + 1U)
-#define FIR_BLOCK_SIZE		16U
-#define IIR_SOS				33U
+#define FIR_ORDER			256
+#define FIR_COEFF_COUNT		(FIR_ORDER + 1)
+#define FIR_BLOCK_SIZE		256
+#define IIR_SOS				33
 #define COEFFS_PER_STAGE	5
 #define IIR_COEFF_COUNT		(IIR_SOS * COEFFS_PER_STAGE)
 #define IIR_BLOCK_SIZE		16U

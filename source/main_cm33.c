@@ -55,9 +55,7 @@
 #define CODEC_VOLUME               	100U
 
 #define TEST_ARR_SIZE				800U
-#define ITER_COUNT					100
 
-#define BOOT_FLAG 					0x01U
 #define APP_MU_IRQHandler_0			MU_A_IRQHandler
 
 #define GPIO_DEBUG_PORT				0U
@@ -127,56 +125,28 @@ codec_config_t boardCodecConfig = {.codecDevType = kCODEC_CS42448, .codecDevConf
 static dma_descriptor_t txDmaDescriptors[DMA_DESCRIPTOR_NUM] __attribute__((aligned(FSL_FEATURE_DMA_LINK_DESCRIPTOR_ALIGN_SIZE)));
 static dma_descriptor_t rxDmaDescriptors[DMA_DESCRIPTOR_NUM] __attribute__((aligned(FSL_FEATURE_DMA_LINK_DESCRIPTOR_ALIGN_SIZE)));
 
+#if HIFI4_USED
+volatile int32_t * src_buffer_32_1 = NULL;
+volatile int32_t * src_buffer_32_2 = NULL;
+volatile int32_t * dst_buffer_32_1 = NULL;
+volatile int32_t * dst_buffer_32_2 = NULL;
+#else
 volatile int32_t src_buffer_32_1[BUFFER_SIZE] __attribute__((aligned(4)));
 volatile int32_t src_buffer_32_2[BUFFER_SIZE] __attribute__((aligned(4)));
 volatile int32_t dst_buffer_32_1[BUFFER_SIZE] __attribute__((aligned(4)));
 volatile int32_t dst_buffer_32_2[BUFFER_SIZE] __attribute__((aligned(4)));
-
-#if HIFI4_USED
-volatile float32_t * src_buffer_f32_1 = NULL;
-volatile float32_t * src_buffer_f32_2 = NULL;
-#else
-#if PQ_USED
-volatile float32_t src_buffer_f32_1[BUFFER_SIZE] __attribute__((aligned(4)));
-volatile float32_t src_buffer_f32_2[BUFFER_SIZE] __attribute__((aligned(4)));
-#else
-volatile float32_t src_buffer_f32_1[BUFFER_SIZE] __attribute__((aligned(4)));
-volatile float32_t src_buffer_f32_2[BUFFER_SIZE] __attribute__((aligned(4)));
-#endif /* PQ_USED */
-#endif /* HIFI4_USED */
-#if HIFI4_USED
-volatile float32_t * dst_buffer_f32_1 = NULL;
-volatile float32_t * dst_buffer_f32_2 = NULL;
-#else
-volatile float32_t dst_buffer_f32_1[BUFFER_SIZE] __attribute__((aligned(4)));
-volatile float32_t dst_buffer_f32_2[BUFFER_SIZE] __attribute__((aligned(4)));
-#endif/* HIFI4_USED */
-
 #if Q31_USED
-#if HIFI4_USED
-volatile q31_t * src_buffer_q31_1 = NULL;
-volatile q31_t * src_buffer_q31_2 = NULL;
-#else
 volatile q31_t src_buffer_q31_1[BUFFER_SIZE] __attribute__((aligned(4)));
 volatile q31_t src_buffer_q31_2[BUFFER_SIZE] __attribute__((aligned(4)));
-volatile q31_t x_peak_log_q31_1[BUFFER_SIZE] = {Q31_ZERO};
-volatile q31_t x_peak_log_q31_2[BUFFER_SIZE] = {Q31_ZERO};
-//volatile q31_t x_peak_log_2_q31[BUFFER_SIZE] = {Q31_ZERO};
-volatile float32_t x_peak_log_f32_1[BUFFER_SIZE] = {0.0f};
-volatile float32_t x_peak_log_f32_2[BUFFER_SIZE] = {0.0f};
-//volatile float32_t x_peak_log_2_f32[BUFFER_SIZE] = {0.0f};
-#endif /* HIFI4_USED */
-#if HIFI4_USED
-static volatile q31_t * dst_buffer_q31_1 = NULL;
-static volatile q31_t * dst_buffer_q31_2 = NULL;
-#else
 volatile q31_t dst_buffer_q31_1[BUFFER_SIZE] __attribute__((aligned(4)));
 volatile q31_t dst_buffer_q31_2[BUFFER_SIZE] __attribute__((aligned(4)));
-#endif /* HIFI4_USED */
 #else
-volatile float32_t x_peak_log_f32_1[BUFFER_SIZE] = {0.0f};
-volatile float32_t x_peak_log_f32_2[BUFFER_SIZE] = {0.0f};
+volatile float32_t src_buffer_f32_1[BUFFER_SIZE] __attribute__((aligned(4)));
+volatile float32_t src_buffer_f32_2[BUFFER_SIZE] __attribute__((aligned(4)));
+volatile float32_t dst_buffer_f32_1[BUFFER_SIZE] __attribute__((aligned(4)));
+volatile float32_t dst_buffer_f32_2[BUFFER_SIZE] __attribute__((aligned(4)));
 #endif /* Q31_USED */
+#endif/* HIFI4_USED */
 
 static dma_handle_t dmaTxHandle;
 static dma_handle_t dmaRxHandle;
@@ -189,7 +159,6 @@ static i2s_transfer_t txTransfer[I2S_TRANSFER_CNT];
 static codec_handle_t codecHandle;
 extern codec_config_t boardCodecConfig;
 
-static float test_arr[TEST_ARR_SIZE] = {0.0f};
 volatile int16_t src_test_arr_16[TEST_ARR_SIZE] = {0};
 volatile int16_t dst_test_arr_16[TEST_ARR_SIZE] = {0};
 float32_t src_test_arr_f32[TEST_ARR_SIZE] = {0.0f};
@@ -240,6 +209,7 @@ static void test_hifi4(void)
 #endif
 }
 
+#if HIFI4_USED
 static void init_hifi4(void)
 {
     /* Semaphore init */
@@ -254,35 +224,36 @@ static void init_hifi4(void)
     hifi4_ctrl.is_hifi4_processing = false;
 
     MU_SetFlags(APP_MU, BOOT_FLAG);
+
     while (BOOT_FLAG != MU_GetFlags(APP_MU))
     {
     }
+
     MU_EnableInterrupts(APP_MU, kMU_Rx0FullInterruptEnable);
 
     while (!hifi4_ctrl.is_hifi4_processing)
     {
     }
+
+    SEMA42_Lock(APP_SEMA42, SEMA42_GATE, PROC_NUM);
 }
+#endif
 
 static void start_digital_loopback(void)
 {
-    i2s_dma_handle_t * handle;
-    dma_handle_t * dma_handle;
-    i2s_transfer_t *currentTransfer;
-
     PRINTF("Setup digital loopback\r\n");
 
-    rxTransfer[0].data     = (uint8_t *)&src_buffer_32_1[0];
-    rxTransfer[0].dataSize = sizeof(src_buffer_32_1);
+    rxTransfer[0].data     = (uint8_t *)src_buffer_32_1;
+    rxTransfer[0].dataSize = BUFFER_SIZE * sizeof(int32_t);
 
-    rxTransfer[1].data     = (uint8_t *)&src_buffer_32_2[0];
-    rxTransfer[1].dataSize = sizeof(src_buffer_32_2);
+    rxTransfer[1].data     = (uint8_t *)src_buffer_32_2;
+    rxTransfer[1].dataSize = BUFFER_SIZE * sizeof(int32_t);
 
-    txTransfer[0].data     = (uint8_t *)&dst_buffer_32_1[0];
-    txTransfer[0].dataSize = sizeof(dst_buffer_32_2);
+    txTransfer[0].data     = (uint8_t *)dst_buffer_32_1;
+    txTransfer[0].dataSize = BUFFER_SIZE * sizeof(int32_t);
 
-    txTransfer[1].data     = (uint8_t *)&dst_buffer_32_2[0];
-    txTransfer[1].dataSize = sizeof(dst_buffer_32_1);
+    txTransfer[1].data     = (uint8_t *)dst_buffer_32_2;
+    txTransfer[1].dataSize = BUFFER_SIZE * sizeof(int32_t);
 
     I2S_RxTransferCreateHandleDMA(I2S_RX, &rxHandle, &dmaRxHandle, RxCallback, (void *)&rxTransfer);
     I2S_TxTransferCreateHandleDMA(I2S_TX, &txHandle, &dmaTxHandle, TxCallback, (void *)&txTransfer);
@@ -313,8 +284,10 @@ static void sleep_ms(float time_ms)
 
 static void TxCallback(I2S_Type *base, i2s_dma_handle_t *handle, status_t completionStatus, void *userData)
 {
-	static bool is_intA = false;
-
+	(void)userData;
+	(void)completionStatus;
+	(void)handle;
+	(void)base;
 	GPIO_PinWrite(GPIO, 0U, GPIO_DEBUG_PIN_TX, 1U);
 	sleep_ms(0.05f);
 	GPIO_PinWrite(GPIO, 0U, GPIO_DEBUG_PIN_TX, 0U);
@@ -323,7 +296,10 @@ static void TxCallback(I2S_Type *base, i2s_dma_handle_t *handle, status_t comple
 #if !(HIFI4_USED)
 static void RxCallback(I2S_Type *base, i2s_dma_handle_t *handle, status_t completionStatus, void *userData)
 {
-	i2s_transfer_t *transfer = (i2s_transfer_t *)userData;
+	(void)userData;
+	(void)completionStatus;
+	(void)base;
+	(void)handle;
 	static bool is_intA = false;
 	static int call_cnt = 0;
 
@@ -351,20 +327,19 @@ static void RxCallback(I2S_Type *base, i2s_dma_handle_t *handle, status_t comple
 			src_buffer_q31_1[j] = (q31_t)src_buffer_32_1[i];
 			src_buffer_q31_1[k] = (q31_t)src_buffer_32_1[i+1];
 		}
-
 		#endif
 
 		#if Q31_USED
-//		fir_process_batch((q31_t *)src_buffer_q31_1, (q31_t *)dst_buffer_q31_1);
+		fir_process_batch((q31_t *)src_buffer_q31_1, (q31_t *)dst_buffer_q31_1);
 //		iir_df1_process_batch((q31_t *)src_buffer_q31_1, (q31_t *)dst_buffer_q31_1);
-		drc_full_stereo_balanced((q31_t *)src_buffer_q31_1, (q31_t *)dst_buffer_q31_1, (q31_t *)x_peak_log_q31_1);
+		drc_full_stereo_balanced((q31_t *)src_buffer_q31_1, (q31_t *)dst_buffer_q31_1);
 //		iir_df2_process_batch((q31_t *)src_buffer_q31_1, (q31_t *)dst_buffer_q31_1);
 		#else
 //		fir_process_batch((float32_t *)src_buffer_f32_1, (float32_t *)dst_buffer_f32_1);
 //		iir_df1_process_batch((float32_t *)src_buffer_f32_1, (float32_t *)dst_buffer_f32_1);
 //		iir_df2T_process_batch((float32_t *)src_buffer_f32_1, (float32_t *)dst_buffer_f32_1);
 //		iir_df2_process_batch((float32_t *)src_buffer_f32_1, (float32_t *)dst_buffer_f32_1);
-		drc_full_stereo_balanced((float32_t *)src_buffer_f32_1, (float32_t *)dst_buffer_f32_1, (float32_t *)x_peak_log_f32_1);
+		drc_full_stereo_balanced((float32_t *)src_buffer_f32_1, (float32_t *)dst_buffer_f32_1);
 		#endif
 
 		#if !(Q31_USED)
@@ -402,11 +377,11 @@ static void RxCallback(I2S_Type *base, i2s_dma_handle_t *handle, status_t comple
 //		iir_df1_process_batch((float32_t *)src_buffer_f32_2, (float32_t *)dst_buffer_f32_2);
 //		iir_df2T_process_batch((float32_t *)src_buffer_f32_2, (float32_t *)dst_buffer_f32_2);
 //		iir_df2_process_batch((float32_t *)src_buffer_f32_2, (float32_t *)dst_buffer_f32_2);
-		drc_full_stereo_balanced((float32_t *)src_buffer_f32_2, (float32_t *)dst_buffer_f32_2, (float32_t *)x_peak_log_f32_2);
+		drc_full_stereo_balanced((float32_t *)src_buffer_f32_2, (float32_t *)dst_buffer_f32_2);
 		#else
-//		fir_process_batch((q31_t *)src_buffer_q31_2, (q31_t *)dst_buffer_q31_2);
+		fir_process_batch((q31_t *)src_buffer_q31_2, (q31_t *)dst_buffer_q31_2);
 //		iir_df1_process_batch((q31_t *)src_buffer_q31_2, (q31_t *)dst_buffer_q31_2);
-		drc_full_stereo_balanced((q31_t *)src_buffer_q31_2, (q31_t *)dst_buffer_q31_2, (q31_t *)x_peak_log_q31_2);
+		drc_full_stereo_balanced((q31_t *)src_buffer_q31_2, (q31_t *)dst_buffer_q31_2);
 //		iir_df2_process_batch((q31_t *)src_buffer_q31_2, (q31_t *)dst_buffer_q31_2);
 		#endif
 
@@ -501,6 +476,9 @@ static void RxCallback(I2S_Type *base, i2s_dma_handle_t *handle, status_t comple
 #else
 static void RxCallback(I2S_Type *base, i2s_dma_handle_t *handle, status_t completionStatus, void *userData)
 {
+	(void)completionStatus;
+	(void)base;
+	(void)handle;
 	i2s_transfer_t *transfer = (i2s_transfer_t *)userData;
 	static bool is_intA = false;
 
@@ -508,98 +486,34 @@ static void RxCallback(I2S_Type *base, i2s_dma_handle_t *handle, status_t comple
 
 	if (!is_intA)
 	{
-		SEMA42_Lock(APP_SEMA42, SEMA42_GATE, PROC_NUM);
-		MU_SetFlags(APP_MU, SEMA42_LOCK_FLAG);
-
 		assert(transfer->dataSize == (BUFFER_SIZE * (sizeof(src_buffer_32_1[0]) / sizeof(transfer->data[0]))));
 		assert((void *)&transfer->data[0] == (void *)&src_buffer_32_1[0]);
 
-		for (int i = 0, j = 0, k = (BUFFER_SIZE/2); i < BUFFER_SIZE; i += 2, ++j, ++k)
-		{
-			src_buffer_f32_1[j] = (float32_t)src_buffer_32_1[i];
-			src_buffer_f32_1[k] = (float32_t)src_buffer_32_1[i+1];
-		}
-		#if Q31_USED
-		arm_scale_f32((float32_t *)src_buffer_f32_1, scale_down_factor, (float32_t *)src_buffer_f32_1, BUFFER_SIZE);
-		arm_float_to_q31((float32_t *)src_buffer_f32_1, (q31_t *)src_buffer_q31_1, BUFFER_SIZE);
-		#endif
-
 		MU_SetFlags(APP_MU, SEMA42_UNLOCK_FLAG);
 		SEMA42_Unlock(APP_SEMA42, SEMA42_GATE);
-		while (SEMA42_DSP_LOCK_FLAG != MU_GetFlags(APP_MU))
-		{
-		}
-		SEMA42_Lock(APP_SEMA42, SEMA42_GATE, PROC_NUM);
 
-		#if Q31_USED
-		arm_q31_to_float((q31_t *)dst_buffer_q31_1, (float32_t *)dst_buffer_f32_1, BUFFER_SIZE);
-		arm_scale_f32((float32_t *)dst_buffer_f32_1, scale_up_factor, (float32_t *)dst_buffer_f32_1, BUFFER_SIZE);
-		#endif
-		for (int i = 0, j = 0, k = (BUFFER_SIZE/2); i < BUFFER_SIZE; i += 2, ++j, ++k)
+		while (SEMA42_DSP_UNLOCK_FLAG != MU_GetFlags(APP_MU))
 		{
-			dst_buffer_32_1[i] = (int32_t)dst_buffer_f32_1[j];
-			dst_buffer_32_1[i+1] = (int32_t)dst_buffer_f32_1[k];
 		}
+
+		MU_SetFlags(APP_MU, SEMA42_LOCK_FLAG);
+		SEMA42_Lock(APP_SEMA42, SEMA42_GATE, PROC_NUM);
 	}
 	else
 	{
-		SEMA42_Lock(APP_SEMA42, SEMA42_GATE, PROC_NUM);
-		MU_SetFlags(APP_MU, SEMA42_LOCK_FLAG);
-
 		assert(transfer->dataSize == (BUFFER_SIZE * (sizeof(src_buffer_32_2[0]) / sizeof(transfer->data[0]))));
 		assert((void *)&transfer->data[0] == (void *)&src_buffer_32_1[0]);
 
-		for (int i = 0, j = 0, k = (BUFFER_SIZE/2); i < BUFFER_SIZE; i += 2, ++j, ++k)
-		{
-			src_buffer_f32_2[j] = (float32_t)src_buffer_32_2[i];
-			src_buffer_f32_2[k] = (float32_t)src_buffer_32_2[i+1];
-		}
-		#if Q31_USED
-		arm_scale_f32((float32_t *)src_buffer_f32_2, scale_down_factor, (float32_t *)src_buffer_f32_2, BUFFER_SIZE);
-		arm_float_to_q31((float32_t *)src_buffer_f32_2, (q31_t *)src_buffer_q31_2, BUFFER_SIZE);
-		#endif
-
 		MU_SetFlags(APP_MU, SEMA42_UNLOCK_FLAG);
 		SEMA42_Unlock(APP_SEMA42, SEMA42_GATE);
-		while (SEMA42_DSP_LOCK_FLAG != MU_GetFlags(APP_MU))
+
+		while (SEMA42_DSP_UNLOCK_FLAG != MU_GetFlags(APP_MU))
 		{
 		}
+
+		MU_SetFlags(APP_MU, SEMA42_LOCK_FLAG);
 		SEMA42_Lock(APP_SEMA42, SEMA42_GATE, PROC_NUM);
-
-		#if Q31_USED
-		arm_q31_to_float((q31_t *)dst_buffer_q31_2, (float32_t *)dst_buffer_f32_2, BUFFER_SIZE);
-		arm_scale_f32((float32_t *)dst_buffer_f32_2, scale_up_factor, (float32_t *)dst_buffer_f32_2, BUFFER_SIZE);
-		#endif
-		for (int i = 0, j = 0, k = (BUFFER_SIZE/2); i < BUFFER_SIZE; i += 2, ++j, ++k)
-		{
-			dst_buffer_32_2[i] = (int32_t)dst_buffer_f32_2[j];
-			dst_buffer_32_2[i+1] = (int32_t)dst_buffer_f32_2[k];
-		}
 	}
-
-//	if (call_cnt == 1001)
-//	{
-////		I2S_TransferAbortDMA(I2S_RX, &rxHandle);
-//
-//		PRINTF("\r\nsrc_buffer_f32_1:\r\n");
-//		print_buffer_data_f32((float32_t *)src_buffer_f32_1, BUFFER_SIZE);
-//		PRINTF("\r\nsrc_buffer_f32_2:\r\n");
-//		print_buffer_data_f32((float32_t *)src_buffer_f32_2, BUFFER_SIZE);
-//		PRINTF("\r\ndst_buffer_f32_1:\r\n");
-//		print_buffer_data_f32((float32_t *)dst_buffer_f32_1, BUFFER_SIZE);
-//		PRINTF("\r\ndst_buffer_f32_2:\r\n");
-//		print_buffer_data_f32((float32_t *)dst_buffer_f32_2, BUFFER_SIZE);
-//		PRINTF("\r\nsrc_buffer_32_1:\r\n");
-//		print_buffer_data_32(src_buffer_32_1, BUFFER_SIZE);
-//		PRINTF("\r\nsrc_buffer_32_2:\r\n");
-//		print_buffer_data_32(src_buffer_32_2, BUFFER_SIZE);
-//		PRINTF("\r\ndst_buffer_32_1:\r\n");
-//		print_buffer_data_32(dst_buffer_32_1, BUFFER_SIZE);
-//		PRINTF("\r\ndst_buffer_32_2:\r\n");
-//		print_buffer_data_32(dst_buffer_32_2, BUFFER_SIZE);
-//
-//	//		PRINTF("\r\nSingle batch processing time %.3f ms\r\n", CYCLES_TO_MS(exec_time_ticks));
-//	}
 
 	is_intA = (is_intA == true ? false : true);
 
@@ -697,8 +611,8 @@ static void configure_dma(void)
 
 static void configure_gpio(void)
 {
-	uint32_t p0_27_state = 0U;
-	uint32_t p0_28_state = 0U;
+	uint8_t p0_27_state = 0U;
+	uint8_t p0_28_state = 0U;
 
     gpio_pin_config_t pin_config = {
         .pinDirection = kGPIO_DigitalOutput,
@@ -742,42 +656,26 @@ void APP_MU_IRQHandler_0(void)
     	{
 			case SRC_BUFFER_1_RCV:
 			{
-				#if !(Q31_USED)
-				src_buffer_f32_1 = (float32_t *)MU_ReceiveMsgNonBlocking(APP_MU, CHN_MU_REG_NUM);
-				#else
-				src_buffer_q31_1 = (q31_t *)MU_ReceiveMsgNonBlocking(APP_MU, CHN_MU_REG_NUM);
-				#endif
+				src_buffer_32_1 = (int32_t *)MU_ReceiveMsgNonBlocking(APP_MU, CHN_MU_REG_NUM);
 				program_stage = SRC_BUFFER_2_RCV;
 				break;
 			}
 			case SRC_BUFFER_2_RCV:
 			{
-				#if !(Q31_USED)
-				src_buffer_f32_2 = (float32_t *)MU_ReceiveMsgNonBlocking(APP_MU, CHN_MU_REG_NUM);
-				#else
-				src_buffer_q31_2 = (q31_t *)MU_ReceiveMsgNonBlocking(APP_MU, CHN_MU_REG_NUM);
-				#endif
+				src_buffer_32_2 = (int32_t *)MU_ReceiveMsgNonBlocking(APP_MU, CHN_MU_REG_NUM);
 				program_stage = DST_BUFFER_1_RCV;
 				break;
 			}
     		case DST_BUFFER_1_RCV:
     		{
-				#if !(Q31_USED)
-				dst_buffer_f32_1 = (float32_t *)MU_ReceiveMsgNonBlocking(APP_MU, CHN_MU_REG_NUM);
-				#else
-				dst_buffer_q31_1 = (q31_t *)MU_ReceiveMsgNonBlocking(APP_MU, CHN_MU_REG_NUM);
-				#endif
+    			dst_buffer_32_1 = (int32_t *)MU_ReceiveMsgNonBlocking(APP_MU, CHN_MU_REG_NUM);
 				program_stage = DST_BUFFER_2_RCV;
     			break;
 			}
     		case DST_BUFFER_2_RCV:
     		{
     			MU_DisableInterrupts(APP_MU, kMU_Rx0FullInterruptEnable);
-				#if !(Q31_USED)
-				dst_buffer_f32_2 = (float32_t *)MU_ReceiveMsgNonBlocking(APP_MU, CHN_MU_REG_NUM);
-				#else
-				dst_buffer_q31_2 = (q31_t *)MU_ReceiveMsgNonBlocking(APP_MU, CHN_MU_REG_NUM);
-				#endif
+    			dst_buffer_32_2 = (int32_t *)MU_ReceiveMsgNonBlocking(APP_MU, CHN_MU_REG_NUM);
 				hifi4_ctrl.is_hifi4_processing = true;
 				program_stage = RUN;
     			break;
