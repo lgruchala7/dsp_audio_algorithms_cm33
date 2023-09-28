@@ -310,42 +310,91 @@ void fir_process_batch(float32_t * src_buffer, float32_t * dst_buffer)
 		arm_fir_f32(&fir_instance_f32_2, &src_buffer[BUFFER_SIZE/2] + (j * FIR_BLOCK_SIZE), &dst_buffer[BUFFER_SIZE/2] + (j * FIR_BLOCK_SIZE), FIR_BLOCK_SIZE);
 	}
 	#else
-	const static int old_val_idx[CHANNEL_CNT] = {0, (FIR_COEFF_COUNT-1) + (BUFFER_SIZE/2)};
-	const static int new_val_idx[CHANNEL_CNT] = {(FIR_COEFF_COUNT-1), ((2*(FIR_COEFF_COUNT-1)) + (BUFFER_SIZE/2))};
+	static const uint32_t old_val_idx[CHANNEL_CNT] = {0, (FIR_COEFF_COUNT-1) + (BUFFER_SIZE/2)};
+	static const uint32_t new_val_idx[CHANNEL_CNT] = {(FIR_COEFF_COUNT-1), ((2*(FIR_COEFF_COUNT-1)) + (BUFFER_SIZE/2))};
 	static bool is_first_call = true;
-	int offset;
-
-	/* copy the new samples to the the src_state buffer */
-	arm_copy_f32(&src_buffer[0], &src_state_buffer[new_val_idx[CHANNEL_LEFT]], (BUFFER_SIZE/2));
-	arm_copy_f32(&src_buffer[BUFFER_SIZE/2], &src_state_buffer[new_val_idx[CHANNEL_RIGHT]], (BUFFER_SIZE/2));
+	uint32_t offset;
+	int dst_buffer_idx;
+	int src_buffer_idx;
 
 	if (is_first_call)
 	{
+		/* call PQ_FIR first to set src and dst buffers for FIR filtering */
 		PQ_FIR(POWERQUAD, &src_state_buffer[old_val_idx[CHANNEL_CNT]], (int32_t)FIR_BLOCK_SIZE, &fir_instance_f32_1.pState[1], FIR_COEFF_COUNT, &dst_state_buffer[old_val_idx[CHANNEL_CNT]], PQ_FIR_FIR);
 		PQ_WaitDone(POWERQUAD);
 		is_first_call = false;
 	}
+
+	dst_buffer_idx = 0;
+	src_buffer_idx = 0;
+	offset = new_val_idx[CHANNEL_LEFT];
+
+	/* copy first FIR_BLOCK_SIZE new samples to the src_state_buffer new values part*/
+	arm_copy_f32(&src_buffer[src_buffer_idx], &src_state_buffer[offset], FIR_BLOCK_SIZE);
 	for (uint32_t i = 0; i < fir_num_blocks; ++i)
 	{
-		offset = i * FIR_BLOCK_SIZE + new_val_idx[CHANNEL_LEFT];
+		/* process next FIR_BLOCK_SIZE samples from src_state_buffer */
 		PQ_FIRIncrement(POWERQUAD, (int32_t)FIR_BLOCK_SIZE, FIR_COEFF_COUNT, offset);
+
+		/* copy last FIR_BLOCK_SIZE new samples to the src_state_buffer old values part */
+		arm_copy_f32(&src_state_buffer[offset], &src_state_buffer[old_val_idx[CHANNEL_LEFT] + (i * FIR_BLOCK_SIZE)], FIR_BLOCK_SIZE);
+
+		if (i > 0)
+		{
+			/* copy first and next FIR_BLOCK_SIZE processed samples to the dst_buffer */
+			arm_copy_f32(&dst_state_buffer[offset - FIR_BLOCK_SIZE], &dst_buffer[dst_buffer_idx], FIR_BLOCK_SIZE);
+			dst_buffer_idx += FIR_BLOCK_SIZE;
+		}
+
+		offset += FIR_BLOCK_SIZE;
+
+		if (i < (fir_num_blocks - 1))
+		{
+			src_buffer_idx += FIR_BLOCK_SIZE;
+			/* copy last FIR_BLOCK_SIZE new samples to the src_state_buffer new values part*/
+			arm_copy_f32(&src_buffer[src_buffer_idx], &src_state_buffer[offset], FIR_BLOCK_SIZE);
+		}
+
 		PQ_WaitDone(POWERQUAD);
 	}
+	/* copy last FIR_BLOCK_SIZE processed samples to the dst_buffer */
+	arm_copy_f32(&dst_state_buffer[offset - FIR_BLOCK_SIZE], &dst_buffer[dst_buffer_idx], FIR_BLOCK_SIZE);
 
-	for (uint32_t j = 0; j < fir_num_blocks; ++j)
+	dst_buffer_idx = BUFFER_SIZE / 2;
+	src_buffer_idx = BUFFER_SIZE / 2;
+	offset = new_val_idx[CHANNEL_RIGHT];
+
+	/* copy first FIR_BLOCK_SIZE new samples to the src_state_buffer new values part*/
+	arm_copy_f32(&src_buffer[src_buffer_idx], &src_state_buffer[offset], FIR_BLOCK_SIZE);
+	for (uint32_t i = 0; i < fir_num_blocks; ++i)
 	{
-		offset = j * FIR_BLOCK_SIZE + new_val_idx[CHANNEL_RIGHT];
-		PQ_FIRIncrement(POWERQUAD, FIR_BLOCK_SIZE, FIR_COEFF_COUNT, offset);
+		/* process next FIR_BLOCK_SIZE samples from src_state_buffer */
+		PQ_FIRIncrement(POWERQUAD, (int32_t)FIR_BLOCK_SIZE, FIR_COEFF_COUNT, offset);
+
+		/* copy last FIR_BLOCK_SIZE new samples to the src_state_buffer old values part */
+		arm_copy_f32(&src_state_buffer[offset], &src_state_buffer[old_val_idx[CHANNEL_RIGHT] + (i * FIR_BLOCK_SIZE)], FIR_BLOCK_SIZE);
+
+		if (i > 0)
+		{
+			/* copy first and next FIR_BLOCK_SIZE processed samples to the dst_buffer */
+			arm_copy_f32(&dst_state_buffer[offset - FIR_BLOCK_SIZE], &dst_buffer[dst_buffer_idx], FIR_BLOCK_SIZE);
+			dst_buffer_idx += FIR_BLOCK_SIZE;
+		}
+
+		offset += FIR_BLOCK_SIZE;
+
+		if (i < (fir_num_blocks - 1))
+		{
+			src_buffer_idx += FIR_BLOCK_SIZE;
+			/* copy last FIR_BLOCK_SIZE new samples to the src_state_buffer new values part*/
+			arm_copy_f32(&src_buffer[src_buffer_idx], &src_state_buffer[offset], FIR_BLOCK_SIZE);
+		}
+
 		PQ_WaitDone(POWERQUAD);
 	}
+	/* copy last FIR_BLOCK_SIZE processed samples to the dst_buffer */
+	arm_copy_f32(&dst_state_buffer[offset - FIR_BLOCK_SIZE], &dst_buffer[dst_buffer_idx], FIR_BLOCK_SIZE);
 
-	/* copy the last numTaps - 1 samples to the state buffer */
-	arm_copy_f32(&dst_state_buffer[new_val_idx[CHANNEL_LEFT]], &dst_buffer[0], (BUFFER_SIZE/2));
-	arm_copy_f32(&dst_state_buffer[new_val_idx[CHANNEL_RIGHT]], &dst_buffer[BUFFER_SIZE/2], (BUFFER_SIZE/2));
-
-	/* copy the last numTaps - 1 samples to the src_state buffer */
-	arm_copy_f32(&src_state_buffer[new_val_idx[CHANNEL_LEFT]], &src_state_buffer[old_val_idx[CHANNEL_LEFT]], (FIR_COEFF_COUNT-1));
-	arm_copy_f32(&src_state_buffer[new_val_idx[CHANNEL_RIGHT]], &src_state_buffer[old_val_idx[CHANNEL_RIGHT]], (FIR_COEFF_COUNT-1));
 	#endif /* PQ_USED */
 }
 #else
@@ -358,45 +407,94 @@ void fir_process_batch(q31_t * src_buffer, q31_t * dst_buffer)
 		arm_fir_q31(&fir_instance_q31_2, &src_buffer[BUFFER_SIZE/2] + (j * FIR_BLOCK_SIZE), &dst_buffer[BUFFER_SIZE/2] + (j * FIR_BLOCK_SIZE), FIR_BLOCK_SIZE);
 	}
 	#else
-	const static int old_val_idx[CHANNEL_CNT] = {0, (FIR_COEFF_COUNT-1) + (BUFFER_SIZE/2)};
-	const static int new_val_idx[CHANNEL_CNT] = {(FIR_COEFF_COUNT-1), ((2*(FIR_COEFF_COUNT-1)) + (BUFFER_SIZE/2))};
+	static const uint32_t old_val_idx[CHANNEL_CNT] = {0, (FIR_COEFF_COUNT-1) + (BUFFER_SIZE/2)};
+	static const uint32_t new_val_idx[CHANNEL_CNT] = {(FIR_COEFF_COUNT-1), ((2*(FIR_COEFF_COUNT-1)) + (BUFFER_SIZE/2))};
 	static bool is_first_call = true;
-	int offset;
-
-	/* copy the new samples to the the src_state buffer */
-	arm_copy_q31(&src_buffer[0], &src_state_buffer[new_val_idx[CHANNEL_LEFT]], (BUFFER_SIZE/2));
-	arm_copy_q31(&src_buffer[BUFFER_SIZE/2], &src_state_buffer[new_val_idx[CHANNEL_RIGHT]], (BUFFER_SIZE/2));
+	uint32_t offset;
+	int dst_buffer_idx;
+	int src_buffer_idx;
 
 	if (is_first_call)
 	{
+		/* call PQ_FIR first to set src and dst buffers for FIR filtering */
 		PQ_FIR(POWERQUAD, &src_state_buffer[old_val_idx[CHANNEL_CNT]], (int32_t)FIR_BLOCK_SIZE, &fir_instance_q31_1.pState[1], FIR_COEFF_COUNT, &dst_state_buffer[old_val_idx[CHANNEL_CNT]], PQ_FIR_FIR);
 		PQ_WaitDone(POWERQUAD);
 		is_first_call = false;
 	}
+
+	dst_buffer_idx = 0;
+	src_buffer_idx = 0;
+	offset = new_val_idx[CHANNEL_LEFT];
+
+	/* copy first FIR_BLOCK_SIZE new samples to the src_state_buffer new values part*/
+	arm_copy_q31(&src_buffer[src_buffer_idx], &src_state_buffer[offset], FIR_BLOCK_SIZE);
 	for (uint32_t i = 0; i < fir_num_blocks; ++i)
 	{
-		offset = i * FIR_BLOCK_SIZE + new_val_idx[CHANNEL_LEFT];
+		/* process next FIR_BLOCK_SIZE samples from src_state_buffer */
 		PQ_FIRIncrement(POWERQUAD, (int32_t)FIR_BLOCK_SIZE, FIR_COEFF_COUNT, offset);
+
+		/* copy last FIR_BLOCK_SIZE new samples to the src_state_buffer old values part */
+		arm_copy_q31(&src_state_buffer[offset], &src_state_buffer[old_val_idx[CHANNEL_LEFT] + (i * FIR_BLOCK_SIZE)], FIR_BLOCK_SIZE);
+
+		if (i > 0)
+		{
+			/* copy first and next FIR_BLOCK_SIZE processed samples to the dst_buffer */
+			arm_copy_q31(&dst_state_buffer[offset - FIR_BLOCK_SIZE], &dst_buffer[dst_buffer_idx], FIR_BLOCK_SIZE);
+			dst_buffer_idx += FIR_BLOCK_SIZE;
+		}
+
+		offset += FIR_BLOCK_SIZE;
+
+		if (i < (fir_num_blocks - 1))
+		{
+			src_buffer_idx += FIR_BLOCK_SIZE;
+			/* copy last FIR_BLOCK_SIZE new samples to the src_state_buffer new values part*/
+			arm_copy_q31(&src_buffer[src_buffer_idx], &src_state_buffer[offset], FIR_BLOCK_SIZE);
+		}
+
 		PQ_WaitDone(POWERQUAD);
 	}
+	/* copy last FIR_BLOCK_SIZE processed samples to the dst_buffer */
+	arm_copy_q31(&dst_state_buffer[offset - FIR_BLOCK_SIZE], &dst_buffer[dst_buffer_idx], FIR_BLOCK_SIZE);
 
-	for (uint32_t j = 0; j < fir_num_blocks; ++j)
+	dst_buffer_idx = BUFFER_SIZE / 2;
+	src_buffer_idx = BUFFER_SIZE / 2;
+	offset = new_val_idx[CHANNEL_RIGHT];
+
+	/* copy first FIR_BLOCK_SIZE new samples to the src_state_buffer new values part*/
+	arm_copy_q31(&src_buffer[src_buffer_idx], &src_state_buffer[offset], FIR_BLOCK_SIZE);
+	for (uint32_t i = 0; i < fir_num_blocks; ++i)
 	{
-		offset = j * FIR_BLOCK_SIZE + new_val_idx[CHANNEL_RIGHT];
-		PQ_FIRIncrement(POWERQUAD, FIR_BLOCK_SIZE, FIR_COEFF_COUNT, offset);
+		/* process next FIR_BLOCK_SIZE samples from src_state_buffer */
+		PQ_FIRIncrement(POWERQUAD, (int32_t)FIR_BLOCK_SIZE, FIR_COEFF_COUNT, offset);
+
+		/* copy last FIR_BLOCK_SIZE new samples to the src_state_buffer old values part */
+		arm_copy_q31(&src_state_buffer[offset], &src_state_buffer[old_val_idx[CHANNEL_RIGHT] + (i * FIR_BLOCK_SIZE)], FIR_BLOCK_SIZE);
+
+		if (i > 0)
+		{
+			/* copy first and next FIR_BLOCK_SIZE processed samples to the dst_buffer */
+			arm_copy_q31(&dst_state_buffer[offset - FIR_BLOCK_SIZE], &dst_buffer[dst_buffer_idx], FIR_BLOCK_SIZE);
+			dst_buffer_idx += FIR_BLOCK_SIZE;
+		}
+
+		offset += FIR_BLOCK_SIZE;
+
+		if (i < (fir_num_blocks - 1))
+		{
+			src_buffer_idx += FIR_BLOCK_SIZE;
+			/* copy last FIR_BLOCK_SIZE new samples to the src_state_buffer new values part*/
+			arm_copy_q31(&src_buffer[src_buffer_idx], &src_state_buffer[offset], FIR_BLOCK_SIZE);
+		}
+
 		PQ_WaitDone(POWERQUAD);
 	}
+	/* copy last FIR_BLOCK_SIZE processed samples to the dst_buffer */
+	arm_copy_q31(&dst_state_buffer[offset - FIR_BLOCK_SIZE], &dst_buffer[dst_buffer_idx], FIR_BLOCK_SIZE);
 
-	/* copy the last numTaps - 1 samples to the state buffer */
-	arm_copy_q31(&dst_state_buffer[new_val_idx[CHANNEL_LEFT]], &dst_buffer[0], (BUFFER_SIZE/2));
-	arm_copy_q31(&dst_state_buffer[new_val_idx[CHANNEL_RIGHT]], &dst_buffer[BUFFER_SIZE/2], (BUFFER_SIZE/2));
-
-	/* copy the last numTaps - 1 samples to the src_state buffer */
-	arm_copy_q31(&src_state_buffer[new_val_idx[CHANNEL_LEFT]], &src_state_buffer[old_val_idx[CHANNEL_LEFT]], (FIR_COEFF_COUNT-1));
-	arm_copy_q31(&src_state_buffer[new_val_idx[CHANNEL_RIGHT]], &src_state_buffer[old_val_idx[CHANNEL_RIGHT]], (FIR_COEFF_COUNT-1));
 	#endif /* PQ_USED */
 }
-#endif
+#endif /* Q31_USED */
 
 #if !(PQ_USED)
 #if !(Q31_USED)

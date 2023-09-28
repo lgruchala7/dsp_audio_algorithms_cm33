@@ -178,6 +178,7 @@ float32_t scale_up_factor = (float32_t)INT32_MAX;
 /*******************************************************************************
  * Code
  ******************************************************************************/
+#if DEBUG == 1
 static void test_hifi4(void)
 {
     /* Semaphore init */
@@ -208,6 +209,7 @@ static void test_hifi4(void)
     		TEST_ARR_SIZE, AUDIO_SAMPLE_RATE);
 #endif
 }
+#endif
 
 #if HIFI4_USED
 static void init_hifi4(void)
@@ -289,7 +291,7 @@ static void TxCallback(I2S_Type *base, i2s_dma_handle_t *handle, status_t comple
 	(void)handle;
 	(void)base;
 	GPIO_PinWrite(GPIO, 0U, GPIO_DEBUG_PIN_TX, 1U);
-	sleep_ms(0.05f);
+//	sleep_ms(0.05f);
 	GPIO_PinWrite(GPIO, 0U, GPIO_DEBUG_PIN_TX, 0U);
 }
 
@@ -301,9 +303,10 @@ static void RxCallback(I2S_Type *base, i2s_dma_handle_t *handle, status_t comple
 	(void)base;
 	(void)handle;
 	static bool is_intA = false;
-	static int call_cnt = 0;
+	uint32_t time_start, duration;
 
 	GPIO_PinWrite(GPIO, 0U, GPIO_DEBUG_PIN_RX, 1U);
+	time_start = MSDK_GetCpuCycleCount();
 
 	#if DEBUG == 1
 	if (call_cnt == 101)
@@ -332,14 +335,15 @@ static void RxCallback(I2S_Type *base, i2s_dma_handle_t *handle, status_t comple
 		#if Q31_USED
 		fir_process_batch((q31_t *)src_buffer_q31_1, (q31_t *)dst_buffer_q31_1);
 //		iir_df1_process_batch((q31_t *)src_buffer_q31_1, (q31_t *)dst_buffer_q31_1);
-		drc_full_stereo_balanced((q31_t *)src_buffer_q31_1, (q31_t *)dst_buffer_q31_1);
+//		drc_full_stereo_balanced((q31_t *)src_buffer_q31_1, (q31_t *)dst_buffer_q31_1);
 //		iir_df2_process_batch((q31_t *)src_buffer_q31_1, (q31_t *)dst_buffer_q31_1);
 		#else
 //		fir_process_batch((float32_t *)src_buffer_f32_1, (float32_t *)dst_buffer_f32_1);
-//		iir_df1_process_batch((float32_t *)src_buffer_f32_1, (float32_t *)dst_buffer_f32_1);
+		iir_df1_process_batch((float32_t *)src_buffer_f32_1, (float32_t *)dst_buffer_f32_1);
 //		iir_df2T_process_batch((float32_t *)src_buffer_f32_1, (float32_t *)dst_buffer_f32_1);
 //		iir_df2_process_batch((float32_t *)src_buffer_f32_1, (float32_t *)dst_buffer_f32_1);
-		drc_full_stereo_balanced((float32_t *)src_buffer_f32_1, (float32_t *)dst_buffer_f32_1);
+//		drc_full_stereo_balanced((float32_t *)dst_buffer_f32_1, (float32_t *)dst_buffer_f32_1);
+//		limiter((float32_t *)src_buffer_f32_1, (float32_t *)dst_buffer_f32_1);
 		#endif
 
 		#if !(Q31_USED)
@@ -374,14 +378,15 @@ static void RxCallback(I2S_Type *base, i2s_dma_handle_t *handle, status_t comple
 
 		#if !(Q31_USED)
 //		fir_process_batch((float32_t *)src_buffer_f32_2, (float32_t *)dst_buffer_f32_2);
-//		iir_df1_process_batch((float32_t *)src_buffer_f32_2, (float32_t *)dst_buffer_f32_2);
+		iir_df1_process_batch((float32_t *)src_buffer_f32_2, (float32_t *)dst_buffer_f32_2);
 //		iir_df2T_process_batch((float32_t *)src_buffer_f32_2, (float32_t *)dst_buffer_f32_2);
 //		iir_df2_process_batch((float32_t *)src_buffer_f32_2, (float32_t *)dst_buffer_f32_2);
-		drc_full_stereo_balanced((float32_t *)src_buffer_f32_2, (float32_t *)dst_buffer_f32_2);
+//		drc_full_stereo_balanced((float32_t *)dst_buffer_f32_2, (float32_t *)dst_buffer_f32_2);
+//		limiter((float32_t *)src_buffer_f32_2, (float32_t *)dst_buffer_f32_2);
 		#else
 		fir_process_batch((q31_t *)src_buffer_q31_2, (q31_t *)dst_buffer_q31_2);
 //		iir_df1_process_batch((q31_t *)src_buffer_q31_2, (q31_t *)dst_buffer_q31_2);
-		drc_full_stereo_balanced((q31_t *)src_buffer_q31_2, (q31_t *)dst_buffer_q31_2);
+//		drc_full_stereo_balanced((q31_t *)src_buffer_q31_2, (q31_t *)dst_buffer_q31_2);
 //		iir_df2_process_batch((q31_t *)src_buffer_q31_2, (q31_t *)dst_buffer_q31_2);
 		#endif
 
@@ -468,10 +473,9 @@ static void RxCallback(I2S_Type *base, i2s_dma_handle_t *handle, status_t comple
 	}
 	#endif /* DEBUG */
 
-	call_cnt++;
-	is_intA = (is_intA == true ? false : true);
-
+	duration = MSDK_GetCpuCycleCount() - time_start;
 	GPIO_PinWrite(GPIO, 0U, GPIO_DEBUG_PIN_RX, 0U);
+	is_intA = (is_intA == true ? false : true);
 }
 #else
 static void RxCallback(I2S_Type *base, i2s_dma_handle_t *handle, status_t completionStatus, void *userData)
@@ -481,22 +485,24 @@ static void RxCallback(I2S_Type *base, i2s_dma_handle_t *handle, status_t comple
 	(void)handle;
 	i2s_transfer_t *transfer = (i2s_transfer_t *)userData;
 	static bool is_intA = false;
+	uint32_t time_start, duration;
 
 	GPIO_PinWrite(GPIO, 0U, GPIO_DEBUG_PIN_RX, 1U);
+	time_start = MSDK_GetCpuCycleCount();
 
 	if (!is_intA)
 	{
 		assert(transfer->dataSize == (BUFFER_SIZE * (sizeof(src_buffer_32_1[0]) / sizeof(transfer->data[0]))));
 		assert((void *)&transfer->data[0] == (void *)&src_buffer_32_1[0]);
 
-		MU_SetFlags(APP_MU, SEMA42_UNLOCK_FLAG);
+		MU_SetFlags(APP_MU, MU_UNLOCK_FLAG);
 		SEMA42_Unlock(APP_SEMA42, SEMA42_GATE);
 
-		while (SEMA42_DSP_UNLOCK_FLAG != MU_GetFlags(APP_MU))
+		while (MU_DSP_UNLOCK_FLAG != MU_GetFlags(APP_MU))
 		{
 		}
 
-		MU_SetFlags(APP_MU, SEMA42_LOCK_FLAG);
+		MU_SetFlags(APP_MU, MU_LOCK_FLAG);
 		SEMA42_Lock(APP_SEMA42, SEMA42_GATE, PROC_NUM);
 	}
 	else
@@ -504,20 +510,20 @@ static void RxCallback(I2S_Type *base, i2s_dma_handle_t *handle, status_t comple
 		assert(transfer->dataSize == (BUFFER_SIZE * (sizeof(src_buffer_32_2[0]) / sizeof(transfer->data[0]))));
 		assert((void *)&transfer->data[0] == (void *)&src_buffer_32_1[0]);
 
-		MU_SetFlags(APP_MU, SEMA42_UNLOCK_FLAG);
+		MU_SetFlags(APP_MU, MU_UNLOCK_FLAG);
 		SEMA42_Unlock(APP_SEMA42, SEMA42_GATE);
 
-		while (SEMA42_DSP_UNLOCK_FLAG != MU_GetFlags(APP_MU))
+		while (MU_DSP_UNLOCK_FLAG != MU_GetFlags(APP_MU))
 		{
 		}
 
-		MU_SetFlags(APP_MU, SEMA42_LOCK_FLAG);
+		MU_SetFlags(APP_MU, MU_LOCK_FLAG);
 		SEMA42_Lock(APP_SEMA42, SEMA42_GATE, PROC_NUM);
 	}
 
-	is_intA = (is_intA == true ? false : true);
-
+	duration = time_start - MSDK_GetCpuCycleCount();
 	GPIO_PinWrite(GPIO, 0U, GPIO_DEBUG_PIN_RX, 0U);
+	is_intA = (is_intA == true ? false : true);
 }
 #endif
 

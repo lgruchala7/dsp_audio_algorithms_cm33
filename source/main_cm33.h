@@ -19,7 +19,7 @@
 /*******************************************************************************
  * Definitions
  ******************************************************************************/
-#define Q31_USED	1
+#define Q31_USED	0
 #define HIFI4_USED	0
 #define PQ_USED		0
 
@@ -34,10 +34,10 @@
 #define SEMA42_GATE 			0U
 /* Flag indicates Core Boot Up*/
 #define BOOT_FLAG 				0x01U
-#define SEMA42_LOCK_FLAG 		0x02U
-#define SEMA42_UNLOCK_FLAG		0x03U
-#define SEMA42_DSP_LOCK_FLAG	0x04U
-#define SEMA42_DSP_UNLOCK_FLAG 	0x05U
+#define MU_LOCK_FLAG 		0x02U
+#define MU_UNLOCK_FLAG		0x03U
+#define MU_DSP_LOCK_FLAG	0x04U
+#define MU_DSP_UNLOCK_FLAG 	0x05U
 /* Channel transmit and receive register */
 #define CHN_MU_REG_NUM 			0U
 #define PROC_NUM				1U

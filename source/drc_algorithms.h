@@ -18,15 +18,13 @@
  ******************************************************************************/
 void calculate_coefficients(void);
 #if Q31_USED
-void compressor_expander_ngate(q31_t * src_signal_arr, q31_t * dst_signal_arr, size_t signal_arr_count);
-void limiter(q31_t * src_signal_arr, q31_t * dst_signal_arr, size_t signal_arr_count);
-void drc_full(q31_t * src_signal_arr, q31_t * dst_signal_arr, size_t signal_arr_count);
+void compressor_expander_ngate(q31_t * src_signal_arr, q31_t * dst_signal_arr);
+void limiter(q31_t * src_signal_arr, q31_t * dst_signal_arr);
 void drc_full_stereo_balanced(q31_t * src_signal_arr, q31_t * dst_signal_arr);
 arm_status arm_divide_q31(q31_t numerator, q31_t denominator, q31_t *quotient, int16_t *shift);
 #else
-void limiter(float32_t * src_signal_arr, float32_t * dst_signal_arr, size_t signal_arr_count);
-void compressor_expander_ngate(float32_t * src_signal_arr, float32_t * dst_signal_arr, size_t signal_arr_count);
-void drc_full(float32_t * src_signal_arr, float32_t * dst_signal_arr, size_t signal_arr_count);
+void limiter(float32_t * src_signal_arr, float32_t * dst_signal_arr);
+void compressor_expander_ngate(float32_t * src_signal_arr, float32_t * dst_signal_arr);
 void drc_full_stereo_balanced(float32_t * src_signal_arr, float32_t * dst_signal_arr);
 #endif
 

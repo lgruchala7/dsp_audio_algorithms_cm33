@@ -267,7 +267,7 @@ void test_hifi4_fir_q31(float32_t * src_buffer_f32, q31_t * src_buffer_q31, floa
 
 	SEMA42_Lock(APP_SEMA42, SEMA42_GATE, PROC_NUM);
 
-	MU_SetFlags(APP_MU, SEMA42_LOCK_FLAG);
+	MU_SetFlags(APP_MU, MU_LOCK_FLAG);
 
 	generate_sine_wave_f32((float32_t *)&src_buffer_f32[0], buffer_len/5, fs, 0.15f, freq, amp, freq_cnt);
 	generate_sine_wave_f32((float32_t *)&src_buffer_f32[1*buffer_len/5], buffer_len/5, fs, 0.40f, freq, amp, freq_cnt);
@@ -281,7 +281,7 @@ void test_hifi4_fir_q31(float32_t * src_buffer_f32, q31_t * src_buffer_q31, floa
 	SEMA42_Unlock(APP_SEMA42, SEMA42_GATE);
 
 	previous_time = MSDK_GetCpuCycleCount();
-	while (SEMA42_DSP_LOCK_FLAG != MU_GetFlags(APP_MU))
+	while (MU_DSP_LOCK_FLAG != MU_GetFlags(APP_MU))
 	{
 	}
 
@@ -300,7 +300,7 @@ void test_hifi4_fir_f32(float32_t * src_buffer_f32, float32_t * dst_buffer_f32, 
 
 	SEMA42_Lock(APP_SEMA42, SEMA42_GATE, PROC_NUM);
 
-	MU_SetFlags(APP_MU, SEMA42_LOCK_FLAG);
+	MU_SetFlags(APP_MU, MU_LOCK_FLAG);
 
 	generate_sine_wave_f32((float32_t *)&src_buffer_f32[0], buffer_len/5, fs, 0.15f, freq, amp, freq_cnt);
 	generate_sine_wave_f32((float32_t *)&src_buffer_f32[1*buffer_len/5], buffer_len/5, fs, 0.40f, freq, amp, freq_cnt);
@@ -313,7 +313,7 @@ void test_hifi4_fir_f32(float32_t * src_buffer_f32, float32_t * dst_buffer_f32, 
 	SEMA42_Unlock(APP_SEMA42, SEMA42_GATE);
 
 	previous_time = MSDK_GetCpuCycleCount();
-	while (SEMA42_DSP_LOCK_FLAG != MU_GetFlags(APP_MU))
+	while (MU_DSP_LOCK_FLAG != MU_GetFlags(APP_MU))
 	{
 	}
 
